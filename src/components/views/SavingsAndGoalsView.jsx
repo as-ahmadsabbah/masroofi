@@ -185,7 +185,7 @@ export default function SavingsAndGoalsView({
                   </div>
 
                   {/* تفاصيل هدف ذلك الشهر إن وُجد */}
-                  {hasGoal && (
+                  {hasGoal ? (
                     <div style={{
                       background: 'var(--bg-surface)',
                       padding: '8px 12px',
@@ -215,6 +215,28 @@ export default function SavingsAndGoalsView({
                           <span>{item.isCurrentMonth ? 'قيد المتابعة' : 'لم يتحقق الهدف'}</span>
                         </span>
                       )}
+                    </div>
+                  ) : (
+                    <div style={{
+                      background: 'var(--bg-surface)',
+                      padding: '6px 12px',
+                      borderRadius: 'var(--radius-md)',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'space-between',
+                      fontSize: '0.78rem',
+                      border: '1px dashed var(--border-subtle)',
+                      color: 'var(--text-muted)',
+                    }}>
+                      <span>بدون هدف مالي محدد لشهر {monthLabel}</span>
+                      <button
+                        type="button"
+                        className="btn btn-secondary btn-sm"
+                        onClick={() => onOpenSetGoal(item.monthKey)}
+                        style={{ padding: '2px 8px', fontSize: '0.74rem' }}
+                      >
+                        + تحديد هدف
+                      </button>
                     </div>
                   )}
                 </div>

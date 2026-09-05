@@ -351,11 +351,11 @@ export const storageService = {
 
   getGoalForMonth(monthKey = getCurrentMonthKey()) {
     const goals = this.getMonthlyGoals();
-    if (goals[monthKey]) {
+    if (goals && goals[monthKey]) {
       return goals[monthKey];
     }
     const settings = this.getSettings();
-    if (settings.goalType && settings.goalType !== 'none' && settings.goalTargetAmount > 0) {
+    if (settings.goalType && settings.goalType !== 'none' && Number(settings.goalTargetAmount) > 0) {
       return {
         goalType: settings.goalType,
         goalTargetAmount: Number(settings.goalTargetAmount),
@@ -363,28 +363,33 @@ export const storageService = {
       };
     }
     return {
-      goalType: 'savings',
-      goalTargetAmount: 1000,
+      goalType: 'none',
+      goalTargetAmount: 0,
       isInherited: true,
     };
   },
 
   saveGoalForMonth(monthKey, goalData) {
     const goals = this.getMonthlyGoals();
+    const cleanGoalType = goalData.goalType === 'spend_limit' ? 'spend_limit' : (goalData.goalType === 'savings' ? 'savings' : 'none');
+    const cleanAmount = cleanGoalType === 'none' ? 0 : (Number(goalData.goalTargetAmount) || 0);
+
     goals[monthKey] = {
-      goalType: goalData.goalType || 'savings',
-      goalTargetAmount: Number(goalData.goalTargetAmount) || 0,
+      goalType: cleanGoalType,
+      goalTargetAmount: cleanAmount,
       updatedAt: new Date().toISOString(),
     };
     this.saveMonthlyGoals(goals);
 
     // تحديث الإعدادات العامة لتبقى متوافقة
-    const s = this.getSettings();
-    this.saveSettings({
-      ...s,
-      goalType: goalData.goalType || 'savings',
-      goalTargetAmount: Number(goalData.goalTargetAmount) || 0,
-    });
+    if (monthKey === getCurrentMonthKey()) {
+      const s = this.getSettings();
+      this.saveSettings({
+        ...s,
+        goalType: cleanGoalType,
+        goalTargetAmount: cleanAmount,
+      });
+    }
 
     return goals[monthKey];
   },
@@ -413,7 +418,8 @@ export const storageService = {
       const goal = this.getGoalForMonth(mKey);
 
       let goalAchieved = false;
-      if (goal && goal.goalTargetAmount > 0) {
+      const hasGoal = goal && goal.goalType !== 'none' && Number(goal.goalTargetAmount) > 0;
+      if (hasGoal) {
         if (goal.goalType === 'savings') {
           goalAchieved = savings >= goal.goalTargetAmount;
         } else if (goal.goalType === 'spend_limit') {
@@ -430,6 +436,7 @@ export const storageService = {
         savings,
         isCurrentMonth,
         goal,
+        hasGoal,
         goalAchieved,
       });
     });

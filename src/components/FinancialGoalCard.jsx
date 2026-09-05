@@ -105,11 +105,12 @@ export default function FinancialGoalCard({
         </div>
 
         <button
-          className="btn btn-secondary btn-icon btn-sm"
+          className="btn btn-secondary btn-sm"
           onClick={onEditGoal}
-          title="تعديل الهدف"
+          style={{ fontSize: '0.78rem' }}
         >
-          <Edit3 size={14} />
+          <Edit3 size={13} />
+          <span>تعديل أو إلغاء الهدف</span>
         </button>
       </div>
 
