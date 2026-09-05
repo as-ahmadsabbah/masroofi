@@ -20,7 +20,9 @@ export const storageService = {
         return DEFAULT_SETTINGS;
       }
       const parsed = JSON.parse(data);
-      // التأكد من ضبط العملة على الشيكل إذا كانت قيمة قديمة
+      if (!parsed || typeof parsed !== 'object') {
+        return DEFAULT_SETTINGS;
+      }
       if (!parsed.baseCurrency || parsed.baseCurrency === 'SAR') {
         parsed.baseCurrency = 'ILS';
         parsed.currencies = DEFAULT_SETTINGS.currencies;
@@ -48,8 +50,13 @@ export const storageService = {
         return DEFAULT_CATEGORIES;
       }
       const parsed = JSON.parse(data);
-      // التحقق مما إذا كانت الفئات قديمة (قبل التبسيط) ونقلها للفئات الجديدة
-      if (parsed.length > 0 && !parsed.some(c => c.id === 'smoke' || c.id === 'coffee')) {
+      if (!Array.isArray(parsed) || parsed.length === 0) {
+        this.saveCategories(DEFAULT_CATEGORIES);
+        return DEFAULT_CATEGORIES;
+      }
+      // التأكد من وجود فئات التبسيط الجديدة
+      const hasSmokeOrCoffee = parsed.some(c => c && (c.id === 'smoke' || c.id === 'coffee' || c.name === 'دخان' || c.name === 'قهوة'));
+      if (!hasSmokeOrCoffee) {
         this.saveCategories(DEFAULT_CATEGORIES);
         return DEFAULT_CATEGORIES;
       }
@@ -72,7 +79,7 @@ export const storageService = {
     const newCat = {
       id: 'cat_' + Date.now(),
       name: category.name,
-      type: category.type || 'daily', // daily | monthly
+      type: category.type || 'daily',
       defaultAmount: category.defaultAmount ? Number(category.defaultAmount) : '',
       color: category.color || '#10b981',
       icon: category.icon || 'ShoppingBag',
@@ -97,7 +104,12 @@ export const storageService = {
         this.saveSubscriptions(DEFAULT_SUBSCRIPTIONS);
         return DEFAULT_SUBSCRIPTIONS;
       }
-      return JSON.parse(data);
+      const parsed = JSON.parse(data);
+      if (!Array.isArray(parsed)) {
+        this.saveSubscriptions(DEFAULT_SUBSCRIPTIONS);
+        return DEFAULT_SUBSCRIPTIONS;
+      }
+      return parsed;
     } catch (e) {
       return DEFAULT_SUBSCRIPTIONS;
     }
@@ -129,55 +141,56 @@ export const storageService = {
     return filtered;
   },
 
-  // معالجة وإضافة الاشتراكات الشهرية تلقائياً في يوم استحقاقها
   processSubscriptionsForMonth(monthKey = getCurrentMonthKey()) {
-    const subs = this.getSubscriptions();
-    if (subs.length === 0) return;
-
-    const appliedKey = `${STORAGE_KEYS.APPLIED_SUBS_PREFIX}${monthKey}`;
-    let appliedSubIds = [];
     try {
-      const existing = localStorage.getItem(appliedKey);
-      if (existing) appliedSubIds = JSON.parse(existing);
-    } catch (e) {}
+      const subs = this.getSubscriptions();
+      if (!Array.isArray(subs) || subs.length === 0) return;
 
-    const today = new Date();
-    const currentDay = today.getDate();
-    const [year, month] = monthKey.split('-').map(Number);
-    const isCurrentMonth = today.getFullYear() === year && (today.getMonth() + 1) === month;
+      const appliedKey = `${STORAGE_KEYS.APPLIED_SUBS_PREFIX}${monthKey}`;
+      let appliedSubIds = [];
+      try {
+        const existing = localStorage.getItem(appliedKey);
+        if (existing) appliedSubIds = JSON.parse(existing);
+      } catch (e) {}
 
-    const expenses = this.getExpenses(monthKey);
-    let changed = false;
+      const today = new Date();
+      const currentDay = today.getDate();
+      const [year, month] = monthKey.split('-').map(Number);
+      const isCurrentMonth = today.getFullYear() === year && (today.getMonth() + 1) === month;
 
-    subs.forEach(sub => {
-      // إذا لم يُطبق هذا الاشتراك في هذا الشهر بعد
-      if (!appliedSubIds.includes(sub.id)) {
-        // نطبقه إذا كان موعده قد حان (اليوم أو قبل اليوم في هذا الشهر)
-        if (!isCurrentMonth || currentDay >= sub.billingDay) {
-          const billingDate = `${monthKey}-${String(sub.billingDay).padStart(2, '0')}`;
-          
-          expenses.unshift({
-            id: 'exp_sub_' + sub.id + '_' + monthKey,
-            amount: Number(sub.amount),
-            currency: 'ILS',
-            convertedAmount: Number(sub.amount),
-            categoryId: 'subscription',
-            categoryName: sub.name,
-            date: billingDate,
-            note: 'اشتراك شهري ثابت (تلقائي)',
-            isSubscription: true,
-            createdAt: new Date().toISOString(),
-          });
+      const expenses = this.getExpenses(monthKey);
+      let changed = false;
 
-          appliedSubIds.push(sub.id);
-          changed = true;
+      subs.forEach(sub => {
+        if (!appliedSubIds.includes(sub.id)) {
+          if (!isCurrentMonth || currentDay >= sub.billingDay) {
+            const billingDate = `${monthKey}-${String(sub.billingDay).padStart(2, '0')}`;
+            
+            expenses.unshift({
+              id: 'exp_sub_' + sub.id + '_' + monthKey,
+              amount: Number(sub.amount),
+              currency: 'ILS',
+              convertedAmount: Number(sub.amount),
+              categoryId: 'subscription',
+              categoryName: sub.name,
+              date: billingDate,
+              note: 'اشتراك شهري ثابت (تلقائي)',
+              isSubscription: true,
+              createdAt: new Date().toISOString(),
+            });
+
+            appliedSubIds.push(sub.id);
+            changed = true;
+          }
         }
-      }
-    });
+      });
 
-    if (changed) {
-      this.saveExpenses(monthKey, expenses);
-      localStorage.setItem(appliedKey, JSON.stringify(appliedSubIds));
+      if (changed) {
+        this.saveExpenses(monthKey, expenses);
+        localStorage.setItem(appliedKey, JSON.stringify(appliedSubIds));
+      }
+    } catch (e) {
+      console.error('Error processing subscriptions:', e);
     }
   },
 
@@ -186,7 +199,9 @@ export const storageService = {
     try {
       const key = `${STORAGE_KEYS.EXPENSES_PREFIX}${monthKey}`;
       const data = localStorage.getItem(key);
-      return data ? JSON.parse(data) : [];
+      if (!data) return [];
+      const parsed = JSON.parse(data);
+      return Array.isArray(parsed) ? parsed : [];
     } catch (e) {
       return [];
     }
@@ -203,7 +218,7 @@ export const storageService = {
 
   addExpense(expense) {
     const date = expense.date || getTodayIso();
-    const monthKey = date.substring(0, 7); // YYYY-MM
+    const monthKey = date.substring(0, 7);
     const expenses = this.getExpenses(monthKey);
 
     const newExpense = {
@@ -247,14 +262,12 @@ export const storageService = {
     return filtered;
   },
 
-  // الحصول على مصاريف اليوم فقط
   getTodayExpenses(todayDateStr = getTodayIso()) {
     const monthKey = todayDateStr.substring(0, 7);
     const expenses = this.getExpenses(monthKey);
     return expenses.filter(e => e.date === todayDateStr);
   },
 
-  // جميع الشهور المسجلة
   getAllRecordedMonths() {
     const months = new Set();
     for (let i = 0; i < localStorage.length; i++) {
@@ -267,29 +280,6 @@ export const storageService = {
     return Array.from(months).sort().reverse();
   },
 
-  // تجميع مصاريف الشهر حسب الأيام
-  getExpensesGroupedByDays(monthKey = getCurrentMonthKey()) {
-    const expenses = this.getExpenses(monthKey);
-    const grouped = {};
-
-    expenses.forEach(e => {
-      const day = e.date;
-      if (!grouped[day]) {
-        grouped[day] = {
-          date: day,
-          total: 0,
-          items: [],
-        };
-      }
-      grouped[day].total += Number(e.convertedAmount || e.amount || 0);
-      grouped[day].items.push(e);
-    });
-
-    // ترتيب الأيام من الأحدث للأقدم
-    return Object.values(grouped).sort((a, b) => new Date(b.date) - new Date(a.date));
-  },
-
-  // --- النسخ الاحتياطي والتصدير ---
   exportAllDataAsJson() {
     const backup = {
       version: '2.0.0',
@@ -334,7 +324,7 @@ export const storageService = {
     const categories = this.getCategories();
     const catMap = Object.fromEntries(categories.map(c => [c.id, c.name]));
 
-    let csv = '\uFEFF'; // UTF-8 BOM للأحرف العربية في Excel
+    let csv = '\uFEFF';
     csv += 'المعرف,التاريخ,الفئة,المبلغ,العملة,الملاحظات\n';
 
     expenses.forEach((e, idx) => {
@@ -346,7 +336,6 @@ export const storageService = {
     return csv;
   },
 
-  // --- توليد بيانات تجريبية بالشيكل للفئات اليومية والاشتراكات ---
   generateDemoData() {
     const currentMonthKey = getCurrentMonthKey();
     const today = new Date();
@@ -354,7 +343,6 @@ export const storageService = {
     const month = String(today.getMonth() + 1).padStart(2, '0');
     const day = today.getDate();
 
-    // إعدادات افتراضية واضحة
     const settings = {
       ...DEFAULT_SETTINGS,
       salary: 4500,
@@ -368,7 +356,6 @@ export const storageService = {
 
     const demoExpenses = [];
 
-    // مصاريف اليوم الحالي
     demoExpenses.push(
       { id: 'exp_td_1', amount: 5, currency: 'ILS', convertedAmount: 5, categoryId: 'smoke', categoryName: 'دخان', date: getTodayIso(), note: 'باكيت دخان الصباح' },
       { id: 'exp_td_2', amount: 5, currency: 'ILS', convertedAmount: 5, categoryId: 'coffee', categoryName: 'قهوة وكافيه', date: getTodayIso(), note: 'قهوة مع الشباب' },
@@ -376,7 +363,6 @@ export const storageService = {
       { id: 'exp_td_4', amount: 8, currency: 'ILS', convertedAmount: 8, categoryId: 'transport', categoryName: 'مواصلات وبنزين', date: getTodayIso(), note: 'تكسي للدوام' }
     );
 
-    // مصاريف الأيام الماضية من بداية الشهر لغاية الأمس
     for (let d = 1; d < day; d++) {
       const dayStr = `${year}-${month}-${String(d).padStart(2, '0')}`;
       demoExpenses.push(
@@ -391,7 +377,6 @@ export const storageService = {
       }
     }
 
-    // اشتراك نتفليكس وفاتورة الموبايل
     demoExpenses.push(
       { id: 'exp_sub_1', amount: 35, currency: 'ILS', convertedAmount: 35, categoryId: 'subscription', categoryName: 'اشتراك نتفليكس', date: `${year}-${month}-01`, note: 'اشتراك شهري ثابت (تلقائي)', isSubscription: true }
     );
