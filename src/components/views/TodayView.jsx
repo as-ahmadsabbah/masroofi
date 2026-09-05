@@ -10,12 +10,15 @@ import {
   History,
   PieChart as PieChartIcon,
   BarChart3,
+  TrendingUp,
   ChevronDown,
   ChevronUp,
+  Repeat,
 } from 'lucide-react';
 import CategoryIcon from '../CategoryIcon';
 import DailySpendingBarChart from '../charts/DailySpendingBarChart';
 import CategoryPieChart from '../charts/CategoryPieChart';
+import FutureForecastChart from '../charts/FutureForecastChart';
 import FinancialGoalCard from '../FinancialGoalCard';
 import {
   formatCurrency,
@@ -24,7 +27,6 @@ import {
   calculateGoalEvaluation,
   getTodayIso,
 } from '../../utils/dateUtils';
-import { Repeat } from 'lucide-react';
 
 export default function TodayView({
   settings,
@@ -42,7 +44,7 @@ export default function TodayView({
   onOpenAddDailyRecurring,
   isDark = true,
 }) {
-  const [chartTab, setChartTab] = useState('daily'); // 'daily' | 'categories'
+  const [chartTab, setChartTab] = useState('forecast'); // 'forecast' | 'daily' | 'categories'
 
   const salary = Number(settings?.salary || 4000);
   const currencySymbol = settings?.baseCurrency === 'USD' ? '$' : '₪';
@@ -64,8 +66,14 @@ export default function TodayView({
   // 3. الباقي من الراتب بعد كل المصاريف
   const remainingSalary = salary - totalMonthSpent;
 
-  // 4. التوقع لنهاية الشهر بناءً على وتيرة الصرف اليومية الشاملة
-  const forecast = calculateMonthForecast(totalMonthSpent, salary);
+  // 4. التوقع لنهاية الشهر بناءً على وتيرة الصرف اليومية الشاملة والمعزولة
+  const forecast = calculateMonthForecast({
+    totalSpentSoFar: totalMonthSpent,
+    salary,
+    priorSpentAmount,
+    monthExpenses,
+    dailyRecurring,
+  });
 
   // 5. تقييم الهدف المالي
   const goalEval = calculateGoalEvaluation(settings, totalMonthSpent, forecast, currentMonthGoal);
@@ -462,20 +470,44 @@ export default function TodayView({
               الرسوم البيانية والإحصائيات
             </h4>
             <span style={{ fontSize: '0.76rem', color: 'var(--text-muted)' }}>
-              {chartTab === 'daily'
+              {chartTab === 'forecast'
+                ? `رسم بياني تخيلي لمسار المصاريف حتى نهاية الشهر مقارنة بسقف الراتب`
+                : chartTab === 'daily'
                 ? `الخط الأصفر يمثل المعدل اليومي المسموح (${forecast.allowedDailyAverage} ${currencySymbol}/يوم)`
                 : 'توزيع المصاريف على الفئات ونسبتها من الإجمالي'}
             </span>
           </div>
 
-          {/* مفتاح التبديل بين الرسمين البيانيين */}
+          {/* مفتاح التبديل بين الرسوم البيانية */}
           <div style={{
             display: 'flex',
             background: 'var(--bg-app)',
             padding: '3px',
             borderRadius: 'var(--radius-full)',
             border: '1px solid var(--border-subtle)',
+            gap: '2px',
           }}>
+            <button
+              type="button"
+              onClick={() => setChartTab('forecast')}
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: '5px',
+                padding: '5px 12px',
+                borderRadius: 'var(--radius-full)',
+                border: 'none',
+                background: chartTab === 'forecast' ? '#8b5cf6' : 'transparent',
+                color: chartTab === 'forecast' ? '#fff' : 'var(--text-muted)',
+                fontSize: '0.8rem',
+                fontWeight: 700,
+                cursor: 'pointer',
+              }}
+            >
+              <TrendingUp size={14} />
+              <span>المسار التخيلي 🔮</span>
+            </button>
+
             <button
               type="button"
               onClick={() => setChartTab('daily')}
@@ -520,14 +552,28 @@ export default function TodayView({
           </div>
         </div>
 
-        {chartTab === 'daily' ? (
+        {chartTab === 'forecast' && (
+          <FutureForecastChart
+            monthExpenses={monthExpenses}
+            salary={salary}
+            priorSpentAmount={priorSpentAmount}
+            dailyRecurring={dailyRecurring}
+            forecast={forecast}
+            currencySymbol={currencySymbol}
+            isDark={isDark}
+          />
+        )}
+
+        {chartTab === 'daily' && (
           <DailySpendingBarChart
             monthExpenses={monthExpenses}
             salary={salary}
             currencySymbol={currencySymbol}
             isDark={isDark}
           />
-        ) : (
+        )}
+
+        {chartTab === 'categories' && (
           <CategoryPieChart
             monthExpenses={monthExpenses}
             categories={categories}

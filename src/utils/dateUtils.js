@@ -75,21 +75,100 @@ export function formatCurrency(amount, currencySymbol = '₪') {
 }
 
 /**
- * حساب التوقع الشهري الذكي
+ * حساب التوقع الشهري الذكي والواقعي
+ * يعزل المصاريف السابقة والاستثنائية ويعتمد على وتيرة الصرف اليومية الحقيقية (المتكررات ومصاريف الأيام الفعلية)
  */
-export function calculateMonthForecast(totalSpentSoFar, salary = 4000, date = new Date()) {
-  const year = date.getFullYear();
-  const month = date.getMonth();
-  
-  const totalDaysInMonth = new Date(year, month + 1, 0).getDate();
-  const currentDay = date.getDate();
-  const daysElapsed = Math.max(1, currentDay);
-  const daysRemaining = Math.max(0, totalDaysInMonth - daysElapsed);
+export function calculateMonthForecast(arg1, arg2, arg3) {
+  let totalSpentSoFar = 0;
+  let salary = 4000;
+  let priorSpentAmount = 0;
+  let monthExpenses = [];
+  let dailyRecurring = [];
+  let subscriptions = [];
+  let monthKey = null;
+  let date = new Date();
 
-  const dailyAverage = totalSpentSoFar / daysElapsed;
-  const projectedEndMonth = Math.round(dailyAverage * totalDaysInMonth);
+  if (typeof arg1 === 'object' && arg1 !== null && !(arg1 instanceof Date)) {
+    totalSpentSoFar = Number(arg1.totalSpentSoFar) || 0;
+    salary = Number(arg1.salary) || 4000;
+    priorSpentAmount = Number(arg1.priorSpentAmount) || 0;
+    monthExpenses = Array.isArray(arg1.monthExpenses) ? arg1.monthExpenses : [];
+    dailyRecurring = Array.isArray(arg1.dailyRecurring) ? arg1.dailyRecurring : [];
+    subscriptions = Array.isArray(arg1.subscriptions) ? arg1.subscriptions : [];
+    monthKey = arg1.monthKey || null;
+    date = arg1.date instanceof Date ? arg1.date : new Date();
+  } else {
+    totalSpentSoFar = Number(arg1) || 0;
+    salary = Number(arg2) || 4000;
+    date = arg3 instanceof Date ? arg3 : new Date();
+  }
+
+  const currentMonthKey = getCurrentMonthKey(date);
+  const targetKey = (typeof monthKey === 'string' && monthKey.includes('-')) ? monthKey : currentMonthKey;
+
+  const [tYear, tMonth] = targetKey.split('-').map(Number);
+  const totalDaysInMonth = new Date(tYear, tMonth, 0).getDate();
+
+  const isFutureMonth = targetKey > currentMonthKey;
+  const isPastMonth = targetKey < currentMonthKey;
+
+  let daysElapsed = 0;
+  let daysRemaining = 0;
+
+  if (isFutureMonth) {
+    daysElapsed = 0;
+    daysRemaining = totalDaysInMonth;
+  } else if (isPastMonth) {
+    daysElapsed = totalDaysInMonth;
+    daysRemaining = 0;
+  } else {
+    const currentDay = date.getDate();
+    daysElapsed = Math.min(totalDaysInMonth, Math.max(1, currentDay));
+    daysRemaining = Math.max(0, totalDaysInMonth - daysElapsed);
+  }
+
+  // 1. حساب المصاريف اليومية المتكررة الفعالة (دخان، قهوة، أكل...)
+  const activeDailyRecurringSum = (dailyRecurring || [])
+    .filter(r => r.active !== false)
+    .reduce((sum, r) => sum + (Number(r.amountPerDay) || 0), 0);
+
+  // 2. حساب الاشتراكات الشهرية الثابتة
+  const monthlySubsSum = (subscriptions || [])
+    .reduce((sum, s) => sum + (Number(s.amount) || 0), 0);
+
+  // 3. عزل المصاريف السابقة والاستثنائية لحساب الوتيرة اليومية الواقعية
+  const regularMonthSpent = Math.max(0, totalSpentSoFar - priorSpentAmount);
+  
+  let realisticDailyPace = 0;
+  if (activeDailyRecurringSum > 0) {
+    // إذا كان لدى المستخدم مصاريف متكررة مسجلة ومعروفة (مثل 20 ₪/يوم)
+    const extraDaily = daysElapsed > 0 ? Math.max(0, (regularMonthSpent - (activeDailyRecurringSum * daysElapsed)) / daysElapsed) : 0;
+    realisticDailyPace = activeDailyRecurringSum + extraDaily;
+  } else if (daysElapsed > 0) {
+    // إذا لم تسجل متكررات، نأخذ متوسط المصاريف العادية بدون المصروف السابق
+    const avg = regularMonthSpent / daysElapsed;
+    realisticDailyPace = avg > 0 ? avg : (totalSpentSoFar / daysElapsed);
+  } else {
+    realisticDailyPace = totalDaysInMonth > 0 ? Math.round((salary / totalDaysInMonth) * 0.5) : 0;
+  }
+
+  // حساب المتوقع لباقي الأيام والإجمالي بنهاية الشهر
+  let projectedFutureSpend = 0;
+  let projectedEndMonth = 0;
+
+  if (isFutureMonth) {
+    projectedFutureSpend = Math.round((totalDaysInMonth * (activeDailyRecurringSum || realisticDailyPace)) + monthlySubsSum);
+    projectedEndMonth = projectedFutureSpend;
+  } else if (isPastMonth) {
+    projectedFutureSpend = 0;
+    projectedEndMonth = Math.round(totalSpentSoFar);
+  } else {
+    projectedFutureSpend = Math.round(daysRemaining * realisticDailyPace);
+    projectedEndMonth = Math.round(totalSpentSoFar + projectedFutureSpend);
+  }
+
   const projectedRemaining = Math.round(salary - projectedEndMonth);
-  const allowedDailyAverage = totalDaysInMonth > 0 ? salary / totalDaysInMonth : 0;
+  const allowedDailyAverage = totalDaysInMonth > 0 ? Math.round(salary / totalDaysInMonth) : 0;
 
   let status = 'safe'; // 'safe' | 'warning' | 'danger'
   if (projectedEndMonth > salary) {
@@ -102,10 +181,13 @@ export function calculateMonthForecast(totalSpentSoFar, salary = 4000, date = ne
     totalDaysInMonth,
     daysElapsed,
     daysRemaining,
-    dailyAverage: Math.round(dailyAverage),
-    allowedDailyAverage: Math.round(allowedDailyAverage),
+    dailyAverage: Math.round(realisticDailyPace),
+    allowedDailyAverage,
     projectedEndMonth,
     projectedRemaining,
+    projectedFutureSpend,
+    isFutureMonth,
+    isPastMonth,
     status,
   };
 }

@@ -155,9 +155,16 @@ export default function SavingsAndGoalsView({
                               الشهر الحالي
                             </span>
                           )}
+                          {item.isFutureMonth && (
+                            <span className="badge badge-variable" style={{ fontSize: '0.7rem' }}>
+                              شهر قادم 🔮
+                            </span>
+                          )}
                         </div>
                         <span style={{ fontSize: '0.76rem', color: 'var(--text-muted)' }}>
-                          الراتب: {formatCurrency(item.salary, currencySymbol)} • المصاريف: {formatCurrency(item.totalSpent, currencySymbol)}
+                          {item.isFutureMonth
+                            ? `الراتب المتوقع: ${formatCurrency(item.salary, currencySymbol)}`
+                            : `الراتب: ${formatCurrency(item.salary, currencySymbol)} • المصاريف: ${formatCurrency(item.totalSpent, currencySymbol)}`}
                         </span>
                       </div>
                     </div>
@@ -165,14 +172,16 @@ export default function SavingsAndGoalsView({
                     <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
                       <div style={{ textAlign: 'left' }}>
                         <span style={{ fontSize: '0.74rem', color: 'var(--text-muted)', display: 'block' }}>
-                          المدخر من الشهر
+                          {item.isFutureMonth ? 'الهدف المالي' : 'المدخر من الشهر'}
                         </span>
                         <strong style={{
                           fontSize: '1.3rem',
                           fontWeight: 900,
-                          color: item.savings > 0 ? 'var(--color-success)' : 'var(--text-muted)',
+                          color: item.isFutureMonth ? '#3b82f6' : (item.savings > 0 ? 'var(--color-success)' : 'var(--text-muted)'),
                         }}>
-                          +{formatCurrency(item.savings, currencySymbol)}
+                          {item.isFutureMonth && hasGoal
+                            ? formatCurrency(goal.goalTargetAmount, currencySymbol)
+                            : `+${formatCurrency(item.savings, currencySymbol)}`}
                         </strong>
                       </div>
 
@@ -206,7 +215,12 @@ export default function SavingsAndGoalsView({
                         </span>
                       </div>
 
-                      {item.goalAchieved ? (
+                      {item.isFutureMonth ? (
+                        <span style={{ color: '#3b82f6', fontWeight: 600, display: 'flex', alignItems: 'center', gap: '4px' }}>
+                          <Target size={14} />
+                          <span>هدف محدد للمستقبل 🔮</span>
+                        </span>
+                      ) : item.goalAchieved ? (
                         <span style={{ color: 'var(--color-success)', fontWeight: 700, display: 'flex', alignItems: 'center', gap: '4px' }}>
                           <CheckCircle2 size={14} />
                           <span>تم تحقيق الهدف 🎯</span>

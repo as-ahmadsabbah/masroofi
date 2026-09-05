@@ -243,9 +243,15 @@ export default function App() {
     (sum, e) => sum + Number(e.convertedAmount || e.amount || 0),
     0
   );
-  const totalMonthSpent = regularMonthTotal + priorSpentAmount;
-
-  const forecast = calculateMonthForecast(totalMonthSpent, salary);
+  const forecast = calculateMonthForecast({
+    totalSpentSoFar: totalMonthSpent,
+    salary,
+    priorSpentAmount,
+    monthExpenses,
+    dailyRecurring,
+    subscriptions,
+    monthKey: currentMonthKey,
+  });
   const currentGoalEval = calculateGoalEvaluation(settings, totalMonthSpent, forecast, currentMonthGoal);
   const savingsSummary = storageService.getAllTimeSavingsSummary(settings);
 

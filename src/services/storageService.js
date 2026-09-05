@@ -409,27 +409,32 @@ export const storageService = {
     months.forEach((mKey) => {
       const expenses = this.getExpenses(mKey);
       const isCurrentMonth = mKey === currentMonthKey;
+      const isFutureMonth = mKey > currentMonthKey;
       const priorSpent = isCurrentMonth ? Number(settings?.priorSpentAmount || 0) : 0;
       
       const regularSpent = expenses.reduce(
         (sum, e) => sum + Number(e.convertedAmount || e.amount || 0),
         0
       );
-      const totalSpent = regularSpent + priorSpent;
-      const savings = Math.max(0, salary - totalSpent);
+      const totalSpent = isFutureMonth ? 0 : (regularSpent + priorSpent);
+      const savings = isFutureMonth ? 0 : Math.max(0, salary - totalSpent);
       const goal = this.getGoalForMonth(mKey);
 
       let goalAchieved = false;
       const hasGoal = goal && goal.goalType !== 'none' && Number(goal.goalTargetAmount) > 0;
       if (hasGoal) {
-        if (goal.goalType === 'savings') {
+        if (isFutureMonth) {
+          goalAchieved = false;
+        } else if (goal.goalType === 'savings') {
           goalAchieved = savings >= goal.goalTargetAmount;
         } else if (goal.goalType === 'spend_limit') {
           goalAchieved = totalSpent <= goal.goalTargetAmount;
         }
       }
 
-      totalCumulativeSavings += savings;
+      if (!isFutureMonth) {
+        totalCumulativeSavings += savings;
+      }
 
       monthlyBreakdown.push({
         monthKey: mKey,
@@ -437,6 +442,7 @@ export const storageService = {
         totalSpent,
         savings,
         isCurrentMonth,
+        isFutureMonth,
         goal,
         hasGoal,
         goalAchieved,
@@ -531,6 +537,14 @@ export const storageService = {
       if (key && key.startsWith(STORAGE_KEYS.EXPENSES_PREFIX)) {
         months.add(key.replace(STORAGE_KEYS.EXPENSES_PREFIX, ''));
       }
+    }
+    const goals = this.getMonthlyGoals();
+    if (goals && typeof goals === 'object') {
+      Object.keys(goals).forEach((mKey) => {
+        if (typeof mKey === 'string' && mKey.includes('-')) {
+          months.add(mKey);
+        }
+      });
     }
     months.add(getCurrentMonthKey());
     return Array.from(months).sort().reverse();
