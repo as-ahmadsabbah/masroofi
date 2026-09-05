@@ -1,25 +1,39 @@
-import React, { useState } from 'react';
-import { Target, X, Check, PiggyBank, ShieldCheck } from 'lucide-react';
-import { formatCurrency } from '../utils/dateUtils';
+import React, { useState, useEffect } from 'react';
+import { Target, X, Check, PiggyBank, ShieldCheck, Calendar } from 'lucide-react';
+import { formatCurrency, formatArabicMonth, getCurrentMonthKey } from '../utils/dateUtils';
 
 export default function SetGoalModal({
   isOpen,
   onClose,
   onSave,
   settings,
+  targetMonthKey = getCurrentMonthKey(),
+  currentGoal = null,
 }) {
-  const [goalType, setGoalType] = useState(settings?.goalType || 'savings');
-  const [targetAmount, setTargetAmount] = useState(settings?.goalTargetAmount || 1000);
+  const [goalType, setGoalType] = useState('savings');
+  const [targetAmount, setTargetAmount] = useState(1000);
+
+  useEffect(() => {
+    if (currentGoal) {
+      setGoalType(currentGoal.goalType || 'savings');
+      setTargetAmount(currentGoal.goalTargetAmount || 1000);
+    } else if (settings) {
+      setGoalType(settings.goalType || 'savings');
+      setTargetAmount(settings.goalTargetAmount || 1000);
+    }
+  }, [currentGoal, settings, isOpen]);
 
   if (!isOpen) return null;
 
   const currencySymbol = settings?.baseCurrency === 'USD' ? '$' : '₪';
+  const monthTitle = formatArabicMonth(targetMonthKey);
 
   const handleSubmit = (e) => {
     e.preventDefault();
     onSave({
       goalType,
       goalTargetAmount: Number(targetAmount) || 1000,
+      monthKey: targetMonthKey,
     });
     onClose();
   };
@@ -27,12 +41,17 @@ export default function SetGoalModal({
   return (
     <div className="modal-overlay" onClick={(e) => e.target === e.currentTarget && onClose()}>
       <div className="modal-content" style={{ maxWidth: '420px', padding: '24px' }}>
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '18px' }}>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '16px' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
             <Target size={22} color="var(--brand-500)" />
-            <h3 style={{ fontSize: '1.2rem', fontWeight: 800, margin: 0 }}>تحديد الهدف المالي للشهر</h3>
+            <div>
+              <h3 style={{ fontSize: '1.18rem', fontWeight: 800, margin: 0 }}>تحديد الهدف المالي</h3>
+              <span style={{ fontSize: '0.78rem', color: 'var(--brand-500)', fontWeight: 700 }}>
+                {monthTitle ? `لشهر ${monthTitle}` : 'لهذا الشهر'}
+              </span>
+            </div>
           </div>
-          <button className="btn btn-secondary btn-icon btn-sm" onClick={onClose}>
+          <button className="btn btn-secondary btn-icon btn-sm" onClick={onClose} style={{ borderRadius: '50%' }}>
             <X size={18} />
           </button>
         </div>
@@ -90,8 +109,8 @@ export default function SetGoalModal({
           <div className="form-group">
             <label className="form-label">
               {goalType === 'savings'
-                ? `المبلغ المراد ادخاره (${currencySymbol}) *`
-                : `الحد الأقصى للمصاريف (${currencySymbol}) *`}
+                ? `المبلغ المراد ادخاره في ${monthTitle} (${currencySymbol}) *`
+                : `الحد الأقصى لمصاريف ${monthTitle} (${currencySymbol}) *`}
             </label>
             <input
               type="number"
@@ -101,11 +120,11 @@ export default function SetGoalModal({
               onChange={(e) => setTargetAmount(e.target.value)}
               placeholder="مثال: 1000"
               required
-              style={{ fontSize: '1.2rem', fontWeight: 800, textAlign: 'center' }}
+              style={{ fontSize: '1.3rem', fontWeight: 800, textAlign: 'center' }}
             />
             <span style={{ fontSize: '0.76rem', color: 'var(--text-muted)', display: 'block', marginTop: '6px' }}>
               {goalType === 'savings'
-                ? 'سيتابع التطبيق وتيرة صرفك ويخبرك إذا كنت ستصل لمبلغ الادخار هذا بنهاية الشهر.'
+                ? 'سيتابع التطبيق وتيرة صرفك ويخبرك إذا كنت ستحقق هذا الادخار بنهاية هذا الشهر.'
                 : 'سيحذرك التطبيق إذا كانت وتيرة صرفك ستتجاوز هذا السقف.'}
             </span>
           </div>
@@ -116,7 +135,7 @@ export default function SetGoalModal({
             </button>
             <button type="submit" className="btn btn-primary">
               <Check size={16} />
-              <span>تأكيد الهدف</span>
+              <span>حفظ هدف الشهر</span>
             </button>
           </div>
         </form>

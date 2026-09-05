@@ -6,6 +6,8 @@ const STORAGE_KEYS = {
   SETTINGS: 'masroofi_settings',
   CATEGORIES: 'masroofi_categories',
   SUBSCRIPTIONS: 'masroofi_subscriptions',
+  DAILY_RECURRING: 'masroofi_daily_recurring',
+  MONTHLY_GOALS: 'masroofi_monthly_goals',
   EXPENSES_PREFIX: 'masroofi_expenses_',
   APPLIED_SUBS_PREFIX: 'masroofi_applied_subs_',
 };
@@ -194,6 +196,251 @@ export const storageService = {
     }
   },
 
+  // --- المصاريف اليومية المتكررة تلقائياً (Daily Recurring Expenses) ---
+  getDailyRecurring() {
+    try {
+      const data = localStorage.getItem(STORAGE_KEYS.DAILY_RECURRING);
+      if (!data) return [];
+      const parsed = JSON.parse(data);
+      return Array.isArray(parsed) ? parsed : [];
+    } catch (e) {
+      return [];
+    }
+  },
+
+  saveDailyRecurring(items) {
+    try {
+      localStorage.setItem(STORAGE_KEYS.DAILY_RECURRING, JSON.stringify(items));
+    } catch (e) {
+      console.error('Error saving daily recurring:', e);
+    }
+  },
+
+  addDailyRecurring(item) {
+    const items = this.getDailyRecurring();
+    const newItem = {
+      id: 'rec_' + Date.now(),
+      name: item.name.trim(),
+      amountPerDay: Number(item.amountPerDay) || 0,
+      categoryId: item.categoryId || 'smoke',
+      categoryName: item.categoryName || item.name.trim(),
+      icon: item.icon || 'Flame',
+      color: item.color || '#ef4444',
+      repeatTillEndOfMonth: item.repeatTillEndOfMonth !== false,
+      startDate: item.startDate || getTodayIso(),
+      endDate: item.endDate || null,
+      active: true,
+      createdAt: new Date().toISOString(),
+    };
+    items.push(newItem);
+    this.saveDailyRecurring(items);
+    return newItem;
+  },
+
+  updateDailyRecurring(updated) {
+    const items = this.getDailyRecurring();
+    const idx = items.findIndex(i => i.id === updated.id);
+    if (idx !== -1) {
+      items[idx] = {
+        ...items[idx],
+        ...updated,
+        amountPerDay: Number(updated.amountPerDay) || items[idx].amountPerDay,
+      };
+      this.saveDailyRecurring(items);
+    }
+    return items;
+  },
+
+  deleteDailyRecurring(id) {
+    const items = this.getDailyRecurring();
+    const filtered = items.filter(i => i.id !== id);
+    this.saveDailyRecurring(filtered);
+    return filtered;
+  },
+
+  toggleDailyRecurring(id) {
+    const items = this.getDailyRecurring();
+    const idx = items.findIndex(i => i.id === id);
+    if (idx !== -1) {
+      items[idx].active = !items[idx].active;
+      this.saveDailyRecurring(items);
+    }
+    return items;
+  },
+
+  processDailyRecurringExpenses(monthKey = getCurrentMonthKey()) {
+    try {
+      const items = this.getDailyRecurring();
+      if (!Array.isArray(items) || items.length === 0) return;
+
+      const [year, month] = monthKey.split('-').map(Number);
+      const totalDaysInMonth = new Date(year, month, 0).getDate();
+      const today = new Date();
+      const isCurrentMonth = today.getFullYear() === year && (today.getMonth() + 1) === month;
+      const currentDay = today.getDate();
+
+      const lastDayToProcess = isCurrentMonth ? currentDay : totalDaysInMonth;
+      const expenses = this.getExpenses(monthKey);
+      let changed = false;
+
+      items.forEach(item => {
+        if (!item.active) return;
+
+        const startDay = item.startDate ? Number(item.startDate.split('-')[2]) : 1;
+        const startMonthKey = item.startDate ? item.startDate.substring(0, 7) : monthKey;
+
+        // إذا كان تاريخ البدء بعد هذا الشهر نتجاهله
+        if (startMonthKey > monthKey) return;
+
+        const effectiveStartDay = startMonthKey === monthKey ? Math.max(1, startDay) : 1;
+
+        for (let d = effectiveStartDay; d <= lastDayToProcess; d++) {
+          const dateStr = `${monthKey}-${String(d).padStart(2, '0')}`;
+          
+          if (item.endDate && dateStr > item.endDate) continue;
+
+          const expId = `exp_rec_${item.id}_${dateStr}`;
+          const alreadyExists = expenses.some(e => e.id === expId || (e.recurringId === item.id && e.date === dateStr));
+
+          if (!alreadyExists) {
+            expenses.unshift({
+              id: expId,
+              amount: Number(item.amountPerDay),
+              currency: 'ILS',
+              convertedAmount: Number(item.amountPerDay),
+              categoryId: item.categoryId,
+              categoryName: item.name,
+              date: dateStr,
+              note: 'مصروف متكرر يومياً (تلقائي)',
+              isRecurring: true,
+              recurringId: item.id,
+              createdAt: new Date().toISOString(),
+            });
+            changed = true;
+          }
+        }
+      });
+
+      if (changed) {
+        this.saveExpenses(monthKey, expenses);
+      }
+    } catch (e) {
+      console.error('Error processing daily recurring expenses:', e);
+    }
+  },
+
+  // --- الأهداف الشهرية المستقلة (Monthly Goals) ---
+  getMonthlyGoals() {
+    try {
+      const data = localStorage.getItem(STORAGE_KEYS.MONTHLY_GOALS);
+      if (!data) return {};
+      const parsed = JSON.parse(data);
+      return parsed && typeof parsed === 'object' ? parsed : {};
+    } catch (e) {
+      return {};
+    }
+  },
+
+  saveMonthlyGoals(goals) {
+    try {
+      localStorage.setItem(STORAGE_KEYS.MONTHLY_GOALS, JSON.stringify(goals));
+    } catch (e) {
+      console.error('Error saving monthly goals:', e);
+    }
+  },
+
+  getGoalForMonth(monthKey = getCurrentMonthKey()) {
+    const goals = this.getMonthlyGoals();
+    if (goals[monthKey]) {
+      return goals[monthKey];
+    }
+    const settings = this.getSettings();
+    if (settings.goalType && settings.goalType !== 'none' && settings.goalTargetAmount > 0) {
+      return {
+        goalType: settings.goalType,
+        goalTargetAmount: Number(settings.goalTargetAmount),
+        isInherited: true,
+      };
+    }
+    return {
+      goalType: 'savings',
+      goalTargetAmount: 1000,
+      isInherited: true,
+    };
+  },
+
+  saveGoalForMonth(monthKey, goalData) {
+    const goals = this.getMonthlyGoals();
+    goals[monthKey] = {
+      goalType: goalData.goalType || 'savings',
+      goalTargetAmount: Number(goalData.goalTargetAmount) || 0,
+      updatedAt: new Date().toISOString(),
+    };
+    this.saveMonthlyGoals(goals);
+
+    // تحديث الإعدادات العامة لتبقى متوافقة
+    const s = this.getSettings();
+    this.saveSettings({
+      ...s,
+      goalType: goalData.goalType || 'savings',
+      goalTargetAmount: Number(goalData.goalTargetAmount) || 0,
+    });
+
+    return goals[monthKey];
+  },
+
+  // --- تقرير المدخرات التراكمية عبر كافة الأشهر (All-Time Savings Summary) ---
+  getAllTimeSavingsSummary(settings) {
+    const months = this.getAllRecordedMonths();
+    const currentMonthKey = getCurrentMonthKey();
+    const salary = Number(settings?.salary || 4000);
+    const currencySymbol = settings?.baseCurrency === 'USD' ? '$' : '₪';
+
+    let totalCumulativeSavings = 0;
+    const monthlyBreakdown = [];
+
+    months.forEach((mKey) => {
+      const expenses = this.getExpenses(mKey);
+      const isCurrentMonth = mKey === currentMonthKey;
+      const priorSpent = isCurrentMonth ? Number(settings?.priorSpentAmount || 0) : 0;
+      
+      const regularSpent = expenses.reduce(
+        (sum, e) => sum + Number(e.convertedAmount || e.amount || 0),
+        0
+      );
+      const totalSpent = regularSpent + priorSpent;
+      const savings = Math.max(0, salary - totalSpent);
+      const goal = this.getGoalForMonth(mKey);
+
+      let goalAchieved = false;
+      if (goal && goal.goalTargetAmount > 0) {
+        if (goal.goalType === 'savings') {
+          goalAchieved = savings >= goal.goalTargetAmount;
+        } else if (goal.goalType === 'spend_limit') {
+          goalAchieved = totalSpent <= goal.goalTargetAmount;
+        }
+      }
+
+      totalCumulativeSavings += savings;
+
+      monthlyBreakdown.push({
+        monthKey: mKey,
+        salary,
+        totalSpent,
+        savings,
+        isCurrentMonth,
+        goal,
+        goalAchieved,
+      });
+    });
+
+    return {
+      totalCumulativeSavings,
+      monthlyBreakdown,
+      currencySymbol,
+    };
+  },
+
   // --- المصاريف (Expenses) ---
   getExpenses(monthKey = getCurrentMonthKey()) {
     try {
@@ -282,12 +529,14 @@ export const storageService = {
 
   exportAllDataAsJson() {
     const backup = {
-      version: '2.0.0',
+      version: '2.1.0',
       exportedAt: new Date().toISOString(),
       appName: 'مصروفي - Masroofi Daily',
       settings: this.getSettings(),
       categories: this.getCategories(),
       subscriptions: this.getSubscriptions(),
+      dailyRecurring: this.getDailyRecurring(),
+      monthlyGoals: this.getMonthlyGoals(),
       monthlyExpenses: {},
     };
 
@@ -306,6 +555,8 @@ export const storageService = {
       if (data.settings) this.saveSettings(data.settings);
       if (data.categories) this.saveCategories(data.categories);
       if (data.subscriptions) this.saveSubscriptions(data.subscriptions);
+      if (data.dailyRecurring) this.saveDailyRecurring(data.dailyRecurring);
+      if (data.monthlyGoals) this.saveMonthlyGoals(data.monthlyGoals);
 
       if (data.monthlyExpenses) {
         Object.entries(data.monthlyExpenses).forEach(([mKey, expList]) => {

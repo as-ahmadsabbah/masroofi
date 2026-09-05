@@ -24,18 +24,22 @@ import {
   calculateGoalEvaluation,
   getTodayIso,
 } from '../../utils/dateUtils';
+import { Repeat } from 'lucide-react';
 
 export default function TodayView({
   settings,
   todayExpenses = [],
   monthExpenses = [],
   categories = [],
+  dailyRecurring = [],
+  currentMonthGoal = null,
   onOpenAddExpense,
   onQuickAdd,
   onEditExpense,
   onDeleteExpense,
   onOpenSetGoal,
   onOpenSetPriorSpent,
+  onOpenAddDailyRecurring,
   isDark = true,
 }) {
   const [chartTab, setChartTab] = useState('daily'); // 'daily' | 'categories'
@@ -64,7 +68,7 @@ export default function TodayView({
   const forecast = calculateMonthForecast(totalMonthSpent, salary);
 
   // 5. تقييم الهدف المالي
-  const goalEval = calculateGoalEvaluation(settings, totalMonthSpent, forecast);
+  const goalEval = calculateGoalEvaluation(settings, totalMonthSpent, forecast, currentMonthGoal);
 
   // فئات سريعة لها مبالغ افتراضية للإدخال السريع بنقرة واحدة (دخان 5 ₪، قهوة 5 ₪...)
   const quickCats = categories.filter(c => c.defaultAmount && Number(c.defaultAmount) > 0);
@@ -149,6 +153,37 @@ export default function TodayView({
           {priorSpentAmount > 0 ? 'تعديل الصرف السابق' : 'تسجيل الصرف السابق'}
         </button>
       </div>
+
+      {/* شريط المصاريف اليومية المتكررة التلقائية (دخان، قهوة...) */}
+      {dailyRecurring && dailyRecurring.length > 0 && (
+        <div style={{
+          background: 'rgba(16, 185, 129, 0.06)',
+          border: '1px solid rgba(16, 185, 129, 0.25)',
+          borderRadius: 'var(--radius-md)',
+          padding: '10px 16px',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'space-between',
+          flexWrap: 'wrap',
+          gap: '10px',
+          fontSize: '0.82rem',
+        }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+            <Repeat size={16} color="var(--brand-500)" />
+            <span>
+              لديك <strong>{dailyRecurring.filter(r => r.active).length}</strong> مصاريف متكررة تلقائياً (دخان، قهوة...) تُحسب يومياً حتى نهاية الشهر
+            </span>
+          </div>
+          <button
+            type="button"
+            className="btn btn-secondary btn-sm"
+            onClick={onOpenAddDailyRecurring}
+            style={{ padding: '4px 12px', fontSize: '0.78rem' }}
+          >
+            + إضافة متكرر جديد
+          </button>
+        </div>
+      )}
 
       {/* 3. بطاقة الهدف المالي والادخار / سقف المصاريف الذكية */}
       <FinancialGoalCard
@@ -298,6 +333,11 @@ export default function TodayView({
                         {exp.isSubscription && (
                           <span className="badge badge-fixed" style={{ fontSize: '0.65rem', padding: '1px 5px' }}>
                             اشتراك شهري تلقائي
+                          </span>
+                        )}
+                        {exp.isRecurring && (
+                          <span className="badge badge-variable" style={{ fontSize: '0.65rem', padding: '1px 5px', color: '#10b981', background: 'rgba(16, 185, 129, 0.12)' }}>
+                            متكرر يومي تلقائي
                           </span>
                         )}
                       </div>

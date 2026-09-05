@@ -7,37 +7,53 @@ import {
   Tag,
   Settings as SettingsIcon,
   Plus,
+  PiggyBank,
+  Repeat,
 } from 'lucide-react';
 
 import { storageService } from './services/storageService';
-import { getCurrentMonthKey, getTodayIso } from './utils/dateUtils';
+import {
+  getCurrentMonthKey,
+  getTodayIso,
+  calculateMonthForecast,
+  calculateGoalEvaluation,
+} from './utils/dateUtils';
 
 import Header from './components/Header';
 import PinLockScreen from './components/PinLockScreen';
 import AddExpenseModal from './components/AddExpenseModal';
 import SetGoalModal from './components/SetGoalModal';
 import SetPriorSpentModal from './components/SetPriorSpentModal';
+import DailyRecurringModal from './components/DailyRecurringModal';
 
 import TodayView from './components/views/TodayView';
 import DailyHistoryView from './components/views/DailyHistoryView';
 import SubscriptionsView from './components/views/SubscriptionsView';
 import CategoriesManagerView from './components/views/CategoriesManagerView';
 import SettingsView from './components/views/SettingsView';
+import SavingsAndGoalsView from './components/views/SavingsAndGoalsView';
 
 export default function App() {
   const [settings, setSettings] = useState(() => storageService.getSettings());
   const [categories, setCategories] = useState(() => storageService.getCategories());
   const [subscriptions, setSubscriptions] = useState(() => storageService.getSubscriptions());
-  const [activeTab, setActiveTab] = useState('today'); // 'today' | 'history' | 'subscriptions' | 'categories' | 'settings'
+  const [dailyRecurring, setDailyRecurring] = useState(() => storageService.getDailyRecurring());
 
   const currentMonthKey = getCurrentMonthKey();
+  const [currentMonthGoal, setCurrentMonthGoal] = useState(() => storageService.getGoalForMonth(currentMonthKey));
+  const [activeTab, setActiveTab] = useState('today'); // 'today' | 'savings' | 'subscriptions' | 'history' | 'categories' | 'settings'
+
   const [monthExpenses, setMonthExpenses] = useState([]);
   const [todayExpenses, setTodayExpenses] = useState([]);
 
   // حالات النوافذ المنبثقة
   const [isAddExpenseOpen, setIsAddExpenseOpen] = useState(false);
   const [isSetGoalOpen, setIsSetGoalOpen] = useState(false);
+  const [targetGoalMonthKey, setTargetGoalMonthKey] = useState(currentMonthKey);
   const [isSetPriorSpentOpen, setIsSetPriorSpentOpen] = useState(false);
+  const [isAddDailyRecurringOpen, setIsAddDailyRecurringOpen] = useState(false);
+  const [editingDailyRecurring, setEditingDailyRecurring] = useState(null);
+
   const [editingExpense, setEditingExpense] = useState(null);
   const [selectedInitialCategory, setSelectedInitialCategory] = useState(null);
 
@@ -52,16 +68,23 @@ export default function App() {
     document.documentElement.setAttribute('data-theme', settings.theme || 'dark');
   }, [settings.theme]);
 
-  // تحديث بيانات المصاريف للشهر واليوم ومعالجة الاشتراكات
+  // تحديث ومعالجة البيانات
   const loadData = useCallback(() => {
-    // معالجة الاشتراكات التلقائية إذا حان موعدها
+    // 1. معالجة الاشتراكات التلقائية للشهر الحالي
     storageService.processSubscriptionsForMonth(currentMonthKey);
 
+    // 2. معالجة المصاريف اليومية المتكررة التلقائية (دخان، قهوة...)
+    storageService.processDailyRecurringExpenses(currentMonthKey);
+
+    // 3. جلب مصاريف الشهر واليوم
     const mExpenses = storageService.getExpenses(currentMonthKey);
     setMonthExpenses(mExpenses);
 
     const tExpenses = storageService.getTodayExpenses(getTodayIso());
     setTodayExpenses(tExpenses);
+
+    setDailyRecurring(storageService.getDailyRecurring());
+    setCurrentMonthGoal(storageService.getGoalForMonth(currentMonthKey));
   }, [currentMonthKey]);
 
   useEffect(() => {
@@ -76,7 +99,7 @@ export default function App() {
     storageService.saveSettings(updated);
   };
 
-  // حفظ أو تعديل مصروف
+  // حفظ أو تعديل مصروف يدوي
   const handleSaveExpense = (expenseData) => {
     if (expenseData.id) {
       storageService.updateExpense(expenseData);
@@ -86,7 +109,7 @@ export default function App() {
     loadData();
   };
 
-  // إضافة سريعة بنقرة واحدة للفئات ذات المبلغ الافتراضي (مثال: دخان 5 ₪)
+  // إضافة سريعة بنقرة واحدة للفئات ذات المبلغ الافتراضي
   const handleQuickAdd = (cat) => {
     if (!cat.defaultAmount) return;
 
@@ -115,7 +138,7 @@ export default function App() {
     loadData();
   };
 
-  // إضافة اشتراك شهري جديد
+  // إضافة اشتراك شهري
   const handleAddSubscription = (subData) => {
     storageService.addSubscription(subData);
     setSubscriptions(storageService.getSubscriptions());
@@ -126,6 +149,29 @@ export default function App() {
   const handleDeleteSubscription = (id) => {
     const updated = storageService.deleteSubscription(id);
     setSubscriptions(updated);
+  };
+
+  // حفظ أو تعديل مصروف متكرر يومي
+  const handleSaveDailyRecurring = (itemData) => {
+    if (itemData.id) {
+      storageService.updateDailyRecurring(itemData);
+    } else {
+      storageService.addDailyRecurring(itemData);
+    }
+    confetti({ particleCount: 35, spread: 50 });
+    loadData();
+  };
+
+  // حذف مصروف متكرر يومي
+  const handleDeleteDailyRecurring = (id) => {
+    storageService.deleteDailyRecurring(id);
+    loadData();
+  };
+
+  // تشغيل / إيقاف مصروف متكرر يومي
+  const handleToggleDailyRecurring = (id) => {
+    storageService.toggleDailyRecurring(id);
+    loadData();
   };
 
   // إضافة فئة جديدة
@@ -141,15 +187,14 @@ export default function App() {
     setCategories(updated);
   };
 
-  // حفظ الهدف المالي
-  const handleSaveGoal = ({ goalType, goalTargetAmount }) => {
-    const updated = {
-      ...settings,
-      goalType,
-      goalTargetAmount: Number(goalTargetAmount) || 0,
-    };
-    setSettings(updated);
-    storageService.saveSettings(updated);
+  // حفظ الهدف المالي لشهر محدد
+  const handleSaveGoal = ({ goalType, goalTargetAmount, monthKey = currentMonthKey }) => {
+    storageService.saveGoalForMonth(monthKey, { goalType, goalTargetAmount });
+    if (monthKey === currentMonthKey) {
+      setSettings(prev => ({ ...prev, goalType, goalTargetAmount }));
+    }
+    confetti({ particleCount: 45, spread: 60 });
+    loadData();
   };
 
   // حفظ المصاريف السابقة قبل استخدام التطبيق
@@ -160,9 +205,10 @@ export default function App() {
     };
     setSettings(updated);
     storageService.saveSettings(updated);
+    loadData();
   };
 
-  // تحديث الإعدادات
+  // تحديث الإعدادات العامة
   const handleUpdateSettings = (newSettings) => {
     setSettings(newSettings);
     storageService.saveSettings(newSettings);
@@ -174,8 +220,25 @@ export default function App() {
     setSettings(storageService.getSettings());
     setCategories(storageService.getCategories());
     setSubscriptions(storageService.getSubscriptions());
+    setDailyRecurring(storageService.getDailyRecurring());
+    setCurrentMonthGoal(storageService.getGoalForMonth(currentMonthKey));
     loadData();
   };
+
+  // الحسابات المالية الإجمالية
+  const currencySymbol = settings.baseCurrency === 'USD' ? '$' : '₪';
+  const salary = Number(settings?.salary || 4000);
+  const priorSpentAmount = Number(settings?.priorSpentAmount || 0);
+
+  const regularMonthTotal = monthExpenses.reduce(
+    (sum, e) => sum + Number(e.convertedAmount || e.amount || 0),
+    0
+  );
+  const totalMonthSpent = regularMonthTotal + priorSpentAmount;
+
+  const forecast = calculateMonthForecast(totalMonthSpent, salary);
+  const currentGoalEval = calculateGoalEvaluation(settings, totalMonthSpent, forecast, currentMonthGoal);
+  const savingsSummary = storageService.getAllTimeSavingsSummary(settings);
 
   // شاشة قفل الـ PIN
   if (isLocked) {
@@ -197,13 +260,12 @@ export default function App() {
 
   const navTabs = [
     { id: 'today', label: 'اليوم', icon: Sun },
+    { id: 'savings', label: 'المدخرات والأهداف', icon: PiggyBank },
+    { id: 'subscriptions', label: `المتكررة (${dailyRecurring.length + subscriptions.length})`, icon: Repeat },
     { id: 'history', label: `السجل (${monthExpenses.length})`, icon: Calendar },
-    { id: 'subscriptions', label: `الاشتراكات (${subscriptions.length})`, icon: Tv },
     { id: 'categories', label: 'الفئات', icon: Tag },
     { id: 'settings', label: 'الإعدادات', icon: SettingsIcon },
   ];
-
-  const currencySymbol = settings.baseCurrency === 'USD' ? '$' : '₪';
 
   return (
     <div className="app-layout">
@@ -216,7 +278,7 @@ export default function App() {
       />
 
       <div className="main-content">
-        {/* 2. شريط التبويبات المبسط */}
+        {/* 2. شريط التبويبات المطور */}
         <nav className="nav-tabs">
           {navTabs.map((item) => {
             const Icon = item.icon;
@@ -241,6 +303,8 @@ export default function App() {
             todayExpenses={todayExpenses}
             monthExpenses={monthExpenses}
             categories={categories}
+            dailyRecurring={dailyRecurring}
+            currentMonthGoal={currentMonthGoal}
             onOpenAddExpense={(cat = null) => {
               setEditingExpense(null);
               setSelectedInitialCategory(cat);
@@ -252,13 +316,55 @@ export default function App() {
               setIsAddExpenseOpen(true);
             }}
             onDeleteExpense={handleDeleteExpense}
-            onOpenSetGoal={() => setIsSetGoalOpen(true)}
+            onOpenSetGoal={(mKey = currentMonthKey) => {
+              setTargetGoalMonthKey(mKey);
+              setIsSetGoalOpen(true);
+            }}
             onOpenSetPriorSpent={() => setIsSetPriorSpentOpen(true)}
+            onOpenAddDailyRecurring={() => {
+              setEditingDailyRecurring(null);
+              setIsAddDailyRecurringOpen(true);
+            }}
             isDark={settings.theme === 'dark'}
           />
         )}
 
-        {/* 4. شاشة السجل والحركات */}
+        {/* 4. شاشة المدخرات التراكمية والأهداف الشهرية */}
+        {activeTab === 'savings' && (
+          <SavingsAndGoalsView
+            settings={settings}
+            savingsSummary={savingsSummary}
+            currentGoalEval={currentGoalEval}
+            onOpenSetGoal={(mKey = currentMonthKey) => {
+              setTargetGoalMonthKey(mKey);
+              setIsSetGoalOpen(true);
+            }}
+            currencySymbol={currencySymbol}
+          />
+        )}
+
+        {/* 5. شاشة المصاريف المتكررة والاشتراكات */}
+        {activeTab === 'subscriptions' && (
+          <SubscriptionsView
+            subscriptions={subscriptions}
+            dailyRecurring={dailyRecurring}
+            onAddSubscription={handleAddSubscription}
+            onDeleteSubscription={handleDeleteSubscription}
+            onOpenAddDailyRecurring={() => {
+              setEditingDailyRecurring(null);
+              setIsAddDailyRecurringOpen(true);
+            }}
+            onEditDailyRecurring={(item) => {
+              setEditingDailyRecurring(item);
+              setIsAddDailyRecurringOpen(true);
+            }}
+            onDeleteDailyRecurring={handleDeleteDailyRecurring}
+            onToggleDailyRecurring={handleToggleDailyRecurring}
+            currencySymbol={currencySymbol}
+          />
+        )}
+
+        {/* 6. شاشة السجل والحركات */}
         {activeTab === 'history' && (
           <DailyHistoryView
             monthExpenses={monthExpenses}
@@ -272,17 +378,7 @@ export default function App() {
           />
         )}
 
-        {/* 5. شاشة الاشتراكات الشهرية الثابتة */}
-        {activeTab === 'subscriptions' && (
-          <SubscriptionsView
-            subscriptions={subscriptions}
-            onAddSubscription={handleAddSubscription}
-            onDeleteSubscription={handleDeleteSubscription}
-            currencySymbol={currencySymbol}
-          />
-        )}
-
-        {/* 6. شاشة إدارة الفئات */}
+        {/* 7. شاشة إدارة الفئات */}
         {activeTab === 'categories' && (
           <CategoriesManagerView
             categories={categories}
@@ -296,7 +392,7 @@ export default function App() {
           />
         )}
 
-        {/* 7. شاشة الإعدادات */}
+        {/* 8. شاشة الإعدادات */}
         {activeTab === 'settings' && (
           <SettingsView
             settings={settings}
@@ -306,7 +402,7 @@ export default function App() {
         )}
       </div>
 
-      {/* 8. الزر العائم للإضافة السريعة */}
+      {/* 9. الزر العائم للإضافة السريعة لمصروف اليوم */}
       <button
         className="fab-btn"
         onClick={() => {
@@ -319,7 +415,7 @@ export default function App() {
         <Plus size={28} />
       </button>
 
-      {/* 9. نافذة تسجيل المصروف السريعة */}
+      {/* 10. نافذة تسجيل المصروف السريعة */}
       <AddExpenseModal
         isOpen={isAddExpenseOpen}
         onClose={() => {
@@ -335,21 +431,36 @@ export default function App() {
         onAddNewCategory={handleAddCategory}
       />
 
-      {/* 10. نافذة تحديد الهدف المالي للشهر */}
+      {/* 11. نافذة تحديد الهدف المالي لشهر محدد */}
       <SetGoalModal
         isOpen={isSetGoalOpen}
         onClose={() => setIsSetGoalOpen(false)}
         onSave={handleSaveGoal}
         settings={settings}
+        targetMonthKey={targetGoalMonthKey}
+        currentGoal={storageService.getGoalForMonth(targetGoalMonthKey)}
       />
 
-      {/* 11. نافذة تسجيل الرصيد والمصروف السابق */}
+      {/* 12. نافذة تسجيل الرصيد والمصروف السابق */}
       <SetPriorSpentModal
         isOpen={isSetPriorSpentOpen}
         onClose={() => setIsSetPriorSpentOpen(false)}
         onSave={handleSavePriorSpent}
-        salary={Number(settings.salary || 4000)}
-        currentPriorSpent={Number(settings.priorSpentAmount || 0)}
+        salary={salary}
+        currentPriorSpent={priorSpentAmount}
+        currencySymbol={currencySymbol}
+      />
+
+      {/* 13. نافذة إضافة أو تعديل المصروف المتكرر يومياً */}
+      <DailyRecurringModal
+        isOpen={isAddDailyRecurringOpen}
+        onClose={() => {
+          setIsAddDailyRecurringOpen(false);
+          setEditingDailyRecurring(null);
+        }}
+        onSave={handleSaveDailyRecurring}
+        categories={categories}
+        editingItem={editingDailyRecurring}
         currencySymbol={currencySymbol}
       />
     </div>

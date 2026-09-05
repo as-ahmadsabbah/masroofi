@@ -104,9 +104,9 @@ export function calculateMonthForecast(totalSpentSoFar, salary = 4000, date = ne
 /**
  * حساب حالة الهدف المالي (هدف ادخار أو سقف مصروفات)
  */
-export function calculateGoalEvaluation(settings, totalSpentSoFar, forecast) {
-  const goalType = settings?.goalType || 'savings';
-  const target = Number(settings?.goalTargetAmount || 0);
+export function calculateGoalEvaluation(settings, totalSpentSoFar, forecast, monthGoal = null) {
+  const goalType = monthGoal?.goalType || settings?.goalType || 'savings';
+  const target = Number(monthGoal?.goalTargetAmount || settings?.goalTargetAmount || 0);
   const salary = Number(settings?.salary || 4000);
   const currencySymbol = settings?.baseCurrency === 'USD' ? '$' : '₪';
 
