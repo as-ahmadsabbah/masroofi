@@ -15,6 +15,8 @@ import { getCurrentMonthKey, getTodayIso } from './utils/dateUtils';
 import Header from './components/Header';
 import PinLockScreen from './components/PinLockScreen';
 import AddExpenseModal from './components/AddExpenseModal';
+import SetGoalModal from './components/SetGoalModal';
+import SetPriorSpentModal from './components/SetPriorSpentModal';
 
 import TodayView from './components/views/TodayView';
 import DailyHistoryView from './components/views/DailyHistoryView';
@@ -34,6 +36,8 @@ export default function App() {
 
   // حالات النوافذ المنبثقة
   const [isAddExpenseOpen, setIsAddExpenseOpen] = useState(false);
+  const [isSetGoalOpen, setIsSetGoalOpen] = useState(false);
+  const [isSetPriorSpentOpen, setIsSetPriorSpentOpen] = useState(false);
   const [editingExpense, setEditingExpense] = useState(null);
   const [selectedInitialCategory, setSelectedInitialCategory] = useState(null);
 
@@ -126,14 +130,36 @@ export default function App() {
 
   // إضافة فئة جديدة
   const handleAddCategory = (catData) => {
-    storageService.addCategory(catData);
+    const newCat = storageService.addCategory(catData);
     setCategories(storageService.getCategories());
+    return newCat;
   };
 
   // حذف فئة
   const handleDeleteCategory = (catId) => {
     const updated = storageService.deleteCategory(catId);
     setCategories(updated);
+  };
+
+  // حفظ الهدف المالي
+  const handleSaveGoal = ({ goalType, goalTargetAmount }) => {
+    const updated = {
+      ...settings,
+      goalType,
+      goalTargetAmount: Number(goalTargetAmount) || 0,
+    };
+    setSettings(updated);
+    storageService.saveSettings(updated);
+  };
+
+  // حفظ المصاريف السابقة قبل استخدام التطبيق
+  const handleSavePriorSpent = (amount) => {
+    const updated = {
+      ...settings,
+      priorSpentAmount: Number(amount) || 0,
+    };
+    setSettings(updated);
+    storageService.saveSettings(updated);
   };
 
   // تحديث الإعدادات
@@ -226,6 +252,8 @@ export default function App() {
               setIsAddExpenseOpen(true);
             }}
             onDeleteExpense={handleDeleteExpense}
+            onOpenSetGoal={() => setIsSetGoalOpen(true)}
+            onOpenSetPriorSpent={() => setIsSetPriorSpentOpen(true)}
             isDark={settings.theme === 'dark'}
           />
         )}
@@ -304,6 +332,25 @@ export default function App() {
         settings={settings}
         editingExpense={editingExpense}
         initialCategory={selectedInitialCategory}
+        onAddNewCategory={handleAddCategory}
+      />
+
+      {/* 10. نافذة تحديد الهدف المالي للشهر */}
+      <SetGoalModal
+        isOpen={isSetGoalOpen}
+        onClose={() => setIsSetGoalOpen(false)}
+        onSave={handleSaveGoal}
+        settings={settings}
+      />
+
+      {/* 11. نافذة تسجيل الرصيد والمصروف السابق */}
+      <SetPriorSpentModal
+        isOpen={isSetPriorSpentOpen}
+        onClose={() => setIsSetPriorSpentOpen(false)}
+        onSave={handleSavePriorSpent}
+        salary={Number(settings.salary || 4000)}
+        currentPriorSpent={Number(settings.priorSpentAmount || 0)}
+        currencySymbol={currencySymbol}
       />
     </div>
   );

@@ -1,23 +1,27 @@
-import React from 'react';
+import React, { useState } from 'react';
 import {
   Plus,
   Trash2,
   Edit2,
-  TrendingDown,
-  Wallet,
   Sparkles,
   AlertCircle,
   CheckCircle2,
   AlertTriangle,
+  History,
+  PieChart as PieChartIcon,
+  BarChart3,
   ChevronDown,
   ChevronUp,
 } from 'lucide-react';
 import CategoryIcon from '../CategoryIcon';
 import DailySpendingBarChart from '../charts/DailySpendingBarChart';
+import CategoryPieChart from '../charts/CategoryPieChart';
+import FinancialGoalCard from '../FinancialGoalCard';
 import {
   formatCurrency,
   formatArabicDateRelative,
   calculateMonthForecast,
+  calculateGoalEvaluation,
   getTodayIso,
 } from '../../utils/dateUtils';
 
@@ -30,10 +34,15 @@ export default function TodayView({
   onQuickAdd,
   onEditExpense,
   onDeleteExpense,
+  onOpenSetGoal,
+  onOpenSetPriorSpent,
   isDark = true,
 }) {
+  const [chartTab, setChartTab] = useState('daily'); // 'daily' | 'categories'
+
   const salary = Number(settings?.salary || 4000);
   const currencySymbol = settings?.baseCurrency === 'USD' ? '$' : '₪';
+  const priorSpentAmount = Number(settings?.priorSpentAmount || 0);
 
   // 1. حساب إجمالي مصروف اليوم
   const todayTotal = todayExpenses.reduce(
@@ -41,55 +50,64 @@ export default function TodayView({
     0
   );
 
-  // 2. حساب التراكمي للشهر الحالي تلقائياً
-  const monthTotal = monthExpenses.reduce(
+  // 2. حساب إجمالي المصاريف المسجلة للشهر + المصروف السابق غير المسجل
+  const regularMonthTotal = monthExpenses.reduce(
     (sum, e) => sum + Number(e.convertedAmount || e.amount || 0),
     0
   );
+  const totalMonthSpent = regularMonthTotal + priorSpentAmount;
 
-  // 3. الباقي من الراتب
-  const remainingSalary = salary - monthTotal;
+  // 3. الباقي من الراتب بعد كل المصاريف
+  const remainingSalary = salary - totalMonthSpent;
 
-  // 4. التوقع لنهاية الشهر بناءً على وتيرة الصرف اليومية
-  const forecast = calculateMonthForecast(monthTotal, salary);
+  // 4. التوقع لنهاية الشهر بناءً على وتيرة الصرف اليومية الشاملة
+  const forecast = calculateMonthForecast(totalMonthSpent, salary);
 
-  // فئات سريعة لها مبالغ افتراضية
+  // 5. تقييم الهدف المالي
+  const goalEval = calculateGoalEvaluation(settings, totalMonthSpent, forecast);
+
+  // فئات سريعة لها مبالغ افتراضية للإدخال السريع بنقرة واحدة (دخان 5 ₪، قهوة 5 ₪...)
   const quickCats = categories.filter(c => c.defaultAmount && Number(c.defaultAmount) > 0);
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: '18px' }}>
-      {/* 1. الشريط المالي العلوي المبسط: الراتب والمتبقي والشهر */}
+      {/* 1. الشريط المالي العلوي الذكي: الراتب والمتبقي وإجمالي الشهر */}
       <div style={{
         display: 'grid',
-        gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))',
+        gridTemplateColumns: 'repeat(auto-fit, minmax(160px, 1fr))',
         gap: '12px',
       }}>
         {/* الباقي من الراتب */}
-        <div className="glass-card" style={{ padding: '16px', textAlign: 'center' }}>
+        <div className="glass-card" style={{ padding: '16px', textAlign: 'center', position: 'relative' }}>
           <span style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>الباقي من راتبك</span>
           <div style={{
-            fontSize: '1.45rem',
+            fontSize: '1.5rem',
             fontWeight: 900,
             color: remainingSalary < 0 ? 'var(--color-danger)' : 'var(--color-success)',
             marginTop: '2px',
           }}>
             {formatCurrency(remainingSalary, currencySymbol)}
           </div>
-          <span style={{ fontSize: '0.72rem', color: 'var(--text-muted)' }}>
+          <span style={{ fontSize: '0.72rem', color: 'var(--text-muted)', display: 'block' }}>
             من راتب {formatCurrency(salary, currencySymbol)}
           </span>
+          {priorSpentAmount > 0 && (
+            <span style={{ fontSize: '0.68rem', color: 'var(--brand-500)', display: 'block', marginTop: '2px' }}>
+              (شامل {formatCurrency(priorSpentAmount, currencySymbol)} صُرفت سابقاً)
+            </span>
+          )}
         </div>
 
         {/* صرفت هالشهر لغاية الآن */}
         <div className="glass-card" style={{ padding: '16px', textAlign: 'center' }}>
           <span style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>صرفت هالشهر لغاية الآن</span>
           <div style={{
-            fontSize: '1.45rem',
+            fontSize: '1.5rem',
             fontWeight: 900,
             color: 'var(--text-primary)',
             marginTop: '2px',
           }}>
-            {formatCurrency(monthTotal, currencySymbol)}
+            {formatCurrency(totalMonthSpent, currencySymbol)}
           </div>
           <span style={{ fontSize: '0.72rem', color: 'var(--text-muted)' }}>
             مجموع تراكمي تلقائي ({forecast.daysElapsed} يوم)
@@ -97,7 +115,49 @@ export default function TodayView({
         </div>
       </div>
 
-      {/* 2. بطاقة "صرفت اليوم: X ₪" البارزة والأساسية */}
+      {/* 2. شريط التنبيه/التعديل للصرف السابق في حال بدء التطبيق بمنتصف الشهر */}
+      <div style={{
+        background: 'var(--bg-surface)',
+        border: '1px dashed var(--border-subtle)',
+        borderRadius: 'var(--radius-md)',
+        padding: '10px 16px',
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+        flexWrap: 'wrap',
+        gap: '10px',
+        fontSize: '0.82rem',
+      }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+          <History size={16} color="var(--brand-500)" />
+          <span>
+            {priorSpentAmount > 0 ? (
+              <>
+                تم احتساب <strong>{formatCurrency(priorSpentAmount, currencySymbol)}</strong> كمصروفات سابقة قبل استخدام التطبيق
+              </>
+            ) : (
+              <span>بدأت استخدام التطبيق بعد استلام الراتب بأيام؟ يمكنك تسجيل ما صرفته سابقاً أو رصيدك المتبقي</span>
+            )}
+          </span>
+        </div>
+        <button
+          type="button"
+          className="btn btn-secondary btn-sm"
+          onClick={onOpenSetPriorSpent}
+          style={{ padding: '4px 12px', fontSize: '0.78rem' }}
+        >
+          {priorSpentAmount > 0 ? 'تعديل الصرف السابق' : 'تسجيل الصرف السابق'}
+        </button>
+      </div>
+
+      {/* 3. بطاقة الهدف المالي والادخار / سقف المصاريف الذكية */}
+      <FinancialGoalCard
+        goalEval={goalEval}
+        currencySymbol={currencySymbol}
+        onEditGoal={onOpenSetGoal}
+      />
+
+      {/* 4. بطاقة "صرفت اليوم: X ₪" البارزة والأساسية */}
       <div className="glass-card" style={{
         background: 'linear-gradient(135deg, rgba(16, 185, 129, 0.12) 0%, rgba(5, 150, 105, 0.04) 100%)',
         border: '2px solid rgba(16, 185, 129, 0.35)',
@@ -127,7 +187,7 @@ export default function TodayView({
           {formatCurrency(todayTotal, currencySymbol)}
         </div>
 
-        {/* زر الإضافة الكبير والمميز */}
+        {/* زر الإضافة الرئيسي الكبير والمميز */}
         <button
           className="btn btn-primary"
           onClick={() => onOpenAddExpense()}
@@ -148,7 +208,7 @@ export default function TodayView({
         {quickCats.length > 0 && (
           <div style={{ marginTop: '16px', display: 'flex', justifyContent: 'center', flexWrap: 'wrap', gap: '8px' }}>
             <span style={{ fontSize: '0.78rem', color: 'var(--text-muted)', width: '100%', marginBottom: '2px' }}>
-              تسجيل سريع بنقرة واحدة:
+              تسجيل سريع بنقرة واحدة بدون حسابات:
             </span>
             {quickCats.map((cat) => (
               <button
@@ -159,7 +219,7 @@ export default function TodayView({
                   display: 'flex',
                   alignItems: 'center',
                   gap: '6px',
-                  padding: '6px 14px',
+                  padding: '7px 14px',
                   borderRadius: 'var(--radius-full)',
                   background: 'var(--bg-surface)',
                   border: '1px solid var(--border-subtle)',
@@ -172,14 +232,14 @@ export default function TodayView({
                 }}
               >
                 <CategoryIcon name={cat.icon} size={15} color={cat.color} />
-                <span>+ {cat.name} ({cat.defaultAmount} ₪)</span>
+                <span>+ {cat.name} ({cat.defaultAmount} {currencySymbol})</span>
               </button>
             ))}
           </div>
         )}
       </div>
 
-      {/* 3. تفاصيل مصاريف اليوم مباشرة تحت بطاقة المجموع */}
+      {/* 5. تفاصيل مصاريف اليوم مباشرة تحت بطاقة المجموع */}
       <div className="glass-card">
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '14px' }}>
           <h3 style={{ fontSize: '1.05rem', fontWeight: 800, margin: 0 }}>
@@ -194,7 +254,7 @@ export default function TodayView({
           <div style={{ textAlign: 'center', padding: '24px 16px', color: 'var(--text-muted)' }}>
             <p style={{ fontSize: '0.9rem' }}>لسّة ما سجلت أي مصروف اليوم.</p>
             <p style={{ fontSize: '0.78rem', marginTop: '4px' }}>
-              اضغط على زر "إضافة مصروف اليوم" أو استخدم الأزرار السريعة أعلاه.
+              اضغط على زر "إضافة مصروف اليوم" أو استخدم أزرار التسجيل السريع أعلاه.
             </p>
           </div>
         ) : (
@@ -279,7 +339,7 @@ export default function TodayView({
         )}
       </div>
 
-      {/* 4. بطاقة التوقع الشهري الذكي (Forecast) */}
+      {/* 6. بطاقة التوقع الشهري الذكي (Smart Forecast) */}
       <div className="glass-card" style={{
         borderLeft: forecast.status === 'danger'
           ? '4px solid var(--color-danger)'
@@ -346,25 +406,95 @@ export default function TodayView({
         </div>
       </div>
 
-      {/* 5. الرسم البياني اليومي مع خط المعدل المسموح */}
+      {/* 7. قسم الرسوم البيانية التفاعلية (أعمدة يومية أو كعكة دائرية للفئات) */}
       <div className="glass-card">
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '14px' }}>
+        <div style={{
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'space-between',
+          flexWrap: 'wrap',
+          gap: '12px',
+          marginBottom: '16px',
+        }}>
           <div>
-            <h4 style={{ fontSize: '1rem', fontWeight: 800, margin: 0 }}>
-              رسم بياني للصرف اليومي
+            <h4 style={{ fontSize: '1.05rem', fontWeight: 800, margin: 0 }}>
+              الرسوم البيانية والإحصائيات
             </h4>
             <span style={{ fontSize: '0.76rem', color: 'var(--text-muted)' }}>
-              الخط الأصفر يمثل المعدل اليومي المسموح من الراتب ({forecast.allowedDailyAverage} {currencySymbol}/يوم)
+              {chartTab === 'daily'
+                ? `الخط الأصفر يمثل المعدل اليومي المسموح (${forecast.allowedDailyAverage} ${currencySymbol}/يوم)`
+                : 'توزيع المصاريف على الفئات ونسبتها من الإجمالي'}
             </span>
+          </div>
+
+          {/* مفتاح التبديل بين الرسمين البيانيين */}
+          <div style={{
+            display: 'flex',
+            background: 'var(--bg-app)',
+            padding: '3px',
+            borderRadius: 'var(--radius-full)',
+            border: '1px solid var(--border-subtle)',
+          }}>
+            <button
+              type="button"
+              onClick={() => setChartTab('daily')}
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: '5px',
+                padding: '5px 12px',
+                borderRadius: 'var(--radius-full)',
+                border: 'none',
+                background: chartTab === 'daily' ? 'var(--brand-500)' : 'transparent',
+                color: chartTab === 'daily' ? '#fff' : 'var(--text-muted)',
+                fontSize: '0.8rem',
+                fontWeight: 700,
+                cursor: 'pointer',
+              }}
+            >
+              <BarChart3 size={14} />
+              <span>الصرف اليومي</span>
+            </button>
+
+            <button
+              type="button"
+              onClick={() => setChartTab('categories')}
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: '5px',
+                padding: '5px 12px',
+                borderRadius: 'var(--radius-full)',
+                border: 'none',
+                background: chartTab === 'categories' ? 'var(--brand-500)' : 'transparent',
+                color: chartTab === 'categories' ? '#fff' : 'var(--text-muted)',
+                fontSize: '0.8rem',
+                fontWeight: 700,
+                cursor: 'pointer',
+              }}
+            >
+              <PieChartIcon size={14} />
+              <span>توزيع الفئات</span>
+            </button>
           </div>
         </div>
 
-        <DailySpendingBarChart
-          monthExpenses={monthExpenses}
-          salary={salary}
-          currencySymbol={currencySymbol}
-          isDark={isDark}
-        />
+        {chartTab === 'daily' ? (
+          <DailySpendingBarChart
+            monthExpenses={monthExpenses}
+            salary={salary}
+            currencySymbol={currencySymbol}
+            isDark={isDark}
+          />
+        ) : (
+          <CategoryPieChart
+            monthExpenses={monthExpenses}
+            categories={categories}
+            priorSpentAmount={priorSpentAmount}
+            currencySymbol={currencySymbol}
+            isDark={isDark}
+          />
+        )}
       </div>
     </div>
   );

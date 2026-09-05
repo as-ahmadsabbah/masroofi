@@ -11,6 +11,7 @@ export default function AddExpenseModal({
   settings,
   editingExpense = null,
   initialCategory = null,
+  onAddNewCategory,
 }) {
   const [categoryId, setCategoryId] = useState('');
   const [amount, setAmount] = useState('');
@@ -18,6 +19,8 @@ export default function AddExpenseModal({
   const [showMore, setShowMore] = useState(false);
   const [date, setDate] = useState(getTodayIso());
   const [note, setNote] = useState('');
+  const [isCreatingCat, setIsCreatingCat] = useState(false);
+  const [newCatName, setNewCatName] = useState('');
 
   useEffect(() => {
     if (editingExpense) {
@@ -47,6 +50,24 @@ export default function AddExpenseModal({
     if (cat.defaultAmount) {
       setAmount(String(cat.defaultAmount));
     }
+  };
+
+  const handleQuickCreateCategory = (e) => {
+    e.preventDefault();
+    if (!newCatName.trim()) return;
+    if (onAddNewCategory) {
+      const created = onAddNewCategory({
+        name: newCatName.trim(),
+        type: 'daily',
+        icon: 'Tag',
+        color: '#10b981',
+      });
+      if (created) {
+        setCategoryId(created.id);
+      }
+    }
+    setNewCatName('');
+    setIsCreatingCat(false);
   };
 
   const handleSubmit = (e) => {
@@ -96,9 +117,69 @@ export default function AddExpenseModal({
         <form onSubmit={handleSubmit}>
           {/* اختيار الفئة أولاً بنقرة واحدة */}
           <div style={{ marginBottom: '18px' }}>
-            <label className="form-label" style={{ fontSize: '0.84rem', color: 'var(--text-muted)' }}>
-              اختر الفئة:
-            </label>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '6px' }}>
+              <label className="form-label" style={{ fontSize: '0.84rem', color: 'var(--text-muted)', margin: 0 }}>
+                اختر الفئة:
+              </label>
+              {!isCreatingCat && (
+                <button
+                  type="button"
+                  onClick={() => setIsCreatingCat(true)}
+                  style={{
+                    background: 'none',
+                    border: 'none',
+                    color: 'var(--brand-500)',
+                    fontSize: '0.78rem',
+                    fontWeight: 700,
+                    cursor: 'pointer',
+                    padding: '2px 6px',
+                  }}
+                >
+                  + فئة مخصصة جديدة
+                </button>
+              )}
+            </div>
+
+            {/* إنشاء فئة مخصصة على الفور */}
+            {isCreatingCat && (
+              <div style={{
+                background: 'var(--bg-app)',
+                padding: '10px 12px',
+                borderRadius: 'var(--radius-md)',
+                border: '1px solid var(--border-subtle)',
+                marginBottom: '10px',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '8px',
+              }}>
+                <input
+                  type="text"
+                  className="form-input"
+                  placeholder="اسم الفئة الجديدة (مثال: بنزين، هدايا...)"
+                  value={newCatName}
+                  onChange={(e) => setNewCatName(e.target.value)}
+                  autoFocus
+                  style={{ fontSize: '0.86rem', padding: '6px 10px' }}
+                />
+                <button
+                  type="button"
+                  className="btn btn-primary btn-sm"
+                  onClick={handleQuickCreateCategory}
+                  style={{ padding: '6px 12px', fontSize: '0.82rem' }}
+                >
+                  إضافة
+                </button>
+                <button
+                  type="button"
+                  className="btn btn-secondary btn-sm"
+                  onClick={() => { setIsCreatingCat(false); setNewCatName(''); }}
+                  style={{ padding: '6px 10px' }}
+                >
+                  إلغاء
+                </button>
+              </div>
+            )}
+
             <div style={{
               display: 'grid',
               gridTemplateColumns: 'repeat(3, 1fr)',

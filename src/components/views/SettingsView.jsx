@@ -9,6 +9,9 @@ import {
   Trash2,
   CheckCircle2,
   FileSpreadsheet,
+  Target,
+  History,
+  PiggyBank,
 } from 'lucide-react';
 import { storageService } from '../../services/storageService';
 import { DEFAULT_CURRENCIES } from '../../constants/currencies';
@@ -25,8 +28,13 @@ export default function SettingsView({
   const [usdRate, setUsdRate] = useState(
     settings?.currencies?.find(c => c.code === 'USD')?.rateToBase || 3.65
   );
+  const [priorSpentAmount, setPriorSpentAmount] = useState(settings?.priorSpentAmount || 0);
+  const [goalType, setGoalType] = useState(settings?.goalType || 'savings');
+  const [goalTargetAmount, setGoalTargetAmount] = useState(settings?.goalTargetAmount || 1000);
   const [pinLockEnabled, setPinLockEnabled] = useState(!!settings?.pinLockEnabled);
   const [pinCode, setPinCode] = useState(settings?.pinHash || '');
+
+  const currencySymbol = baseCurrency === 'USD' ? '$' : '₪';
 
   const handleSaveGeneral = (e) => {
     e.preventDefault();
@@ -42,16 +50,19 @@ export default function SettingsView({
 
     const updated = {
       ...settings,
-      salary: Number(salary),
+      salary: Number(salary) || 4000,
       baseCurrency,
       currencies: updatedCurrencies,
+      priorSpentAmount: Number(priorSpentAmount) || 0,
+      goalType,
+      goalTargetAmount: Number(goalTargetAmount) || 0,
       pinLockEnabled,
       pinHash: pinLockEnabled ? pinCode : '',
     };
 
     onUpdateSettings(updated);
     confetti({ particleCount: 50, spread: 60 });
-    alert('تم حفظ الإعدادات بنجاح!');
+    alert('تم حفظ جميع الإعدادات بنجاح!');
   };
 
   // تصدير نسخة احتياطية JSON
@@ -125,7 +136,7 @@ export default function SettingsView({
       <div className="glass-card">
         <h2 style={{ fontSize: '1.25rem', fontWeight: 800, marginBottom: '16px', display: 'flex', alignItems: 'center', gap: '8px' }}>
           <Settings size={20} color="var(--brand-500)" />
-          <span>الراتب والعملة</span>
+          <span>الراتب والعملة والهدف المالي</span>
         </h2>
 
         <form onSubmit={handleSaveGeneral}>
@@ -151,7 +162,7 @@ export default function SettingsView({
                 onChange={(e) => setBaseCurrency(e.target.value)}
                 style={{ fontSize: '1rem', fontWeight: 700 }}
               >
-                <option value="ILS">شيكل (₪ - ILS)</option>
+                <option value="ILS">شيكل فلسطيني (₪ - ILS)</option>
                 <option value="USD">دولار أمريكي ($ - USD)</option>
               </select>
             </div>
@@ -166,6 +177,82 @@ export default function SettingsView({
                 onChange={(e) => setUsdRate(e.target.value)}
                 style={{ fontSize: '1rem' }}
               />
+            </div>
+          </div>
+
+          {/* الرصيد السابق غير المسجل عند بدء استخدام التطبيق بمنتصف الشهر */}
+          <div style={{
+            background: 'var(--bg-app)',
+            padding: '16px',
+            borderRadius: 'var(--radius-md)',
+            border: '1px solid var(--border-subtle)',
+            marginBottom: '16px',
+          }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '8px' }}>
+              <History size={18} color="var(--brand-500)" />
+              <strong style={{ fontSize: '0.94rem' }}>المصروفات السابقة قبل استخدام التطبيق لهذا الشهر</strong>
+            </div>
+            <p style={{ fontSize: '0.78rem', color: 'var(--text-muted)', marginBottom: '10px' }}>
+              إذا بدأت باستخدام التطبيق بعد استلام الراتب بأيام وصرفت منه جزءاً دون تسجيل، ضع المبلغ هنا ليتم خصمه تلقائياً من الراتب واحتسابه في مجموع الشهر.
+            </p>
+            <div style={{ maxWidth: '280px' }}>
+              <input
+                type="number"
+                step="any"
+                className="form-input"
+                value={priorSpentAmount}
+                onChange={(e) => setPriorSpentAmount(e.target.value)}
+                placeholder="0"
+                style={{ fontSize: '1.1rem', fontWeight: 700 }}
+              />
+            </div>
+          </div>
+
+          {/* الهدف المالي الشهري */}
+          <div style={{
+            background: 'var(--bg-app)',
+            padding: '16px',
+            borderRadius: 'var(--radius-md)',
+            border: '1px solid var(--border-subtle)',
+            marginBottom: '16px',
+          }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '8px' }}>
+              <Target size={18} color="#3b82f6" />
+              <strong style={{ fontSize: '0.94rem' }}>الهدف المالي الشهري (ادخار أو سقف مصاريف)</strong>
+            </div>
+            <p style={{ fontSize: '0.78rem', color: 'var(--text-muted)', marginBottom: '12px' }}>
+              حدد ما إذا كنت تسعى لادخار مبلغ محدد، أو وضع سقف أقصى لا تتجاوزه مصاريفك، ليتابع التطبيق التزامك به يومياً.
+            </p>
+
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: '12px' }}>
+              <div>
+                <label className="form-label">نوع الهدف</label>
+                <select
+                  className="form-select"
+                  value={goalType}
+                  onChange={(e) => setGoalType(e.target.value)}
+                  style={{ fontSize: '0.9rem' }}
+                >
+                  <option value="savings">🎯 هدف ادخار شهري</option>
+                  <option value="spend_limit">🛡️ سقف أقصى للمصاريف</option>
+                  <option value="none">بدون هدف مالي محدد</option>
+                </select>
+              </div>
+
+              {goalType !== 'none' && (
+                <div>
+                  <label className="form-label">المبلغ المستهدف ({currencySymbol})</label>
+                  <input
+                    type="number"
+                    step="any"
+                    className="form-input"
+                    value={goalTargetAmount}
+                    onChange={(e) => setGoalTargetAmount(e.target.value)}
+                    placeholder="مثال: 1000"
+                    style={{ fontSize: '1.1rem', fontWeight: 800 }}
+                  />
+                </div>
+              )}
             </div>
           </div>
 

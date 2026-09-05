@@ -8,6 +8,9 @@ export const DEFAULT_SETTINGS = {
   baseCurrency: 'ILS',
   currencies: DEFAULT_CURRENCIES,
   financialMonthStartDay: 1, // بداية الشهر
+  priorSpentAmount: 0, // مصروفات سابقة قبل بدء استخدام التطبيق لهذا الشهر
+  goalType: 'savings', // 'savings' (هدف ادخار) | 'spend_limit' (سقف مصاريف) | 'none'
+  goalTargetAmount: 1000, // المبلغ المستهدف
   pinLockEnabled: false,
   pinHash: '',
   theme: 'dark',

@@ -1,5 +1,5 @@
 /**
- * دوال التواريخ والحسابات اليومية والشهرية التلقائية
+ * دوال التواريخ والحسابات الذكية الشاملة للأهداف والتوقعات
  */
 
 export function getTodayIso() {
@@ -66,36 +66,22 @@ export function formatCurrency(amount, currencySymbol = '₪') {
 }
 
 /**
- * حساب التوقع الشهري بناءً على معدل الصرف اليومي
+ * حساب التوقع الشهري الذكي
  */
 export function calculateMonthForecast(totalSpentSoFar, salary = 4000, date = new Date()) {
   const year = date.getFullYear();
-  const month = date.getMonth(); // 0-indexed
+  const month = date.getMonth();
   
-  // إجمالي عدد أيام الشهر
   const totalDaysInMonth = new Date(year, month + 1, 0).getDate();
-  
-  // عدد الأيام التي مرت من الشهر (بما فيها اليوم)
   const currentDay = date.getDate();
   const daysElapsed = Math.max(1, currentDay);
   const daysRemaining = Math.max(0, totalDaysInMonth - daysElapsed);
 
-  // معدل الصرف اليومي حتى الآن
   const dailyAverage = totalSpentSoFar / daysElapsed;
-
-  // التوقع لنهاية الشهر = معدل الصرف اليومي × إجمالي عدد أيام الشهر
   const projectedEndMonth = Math.round(dailyAverage * totalDaysInMonth);
-
-  // المتبقي المتوقع من الراتب آخر الشهر
   const projectedRemaining = Math.round(salary - projectedEndMonth);
-
-  // المعدل اليومي المسموح من الراتب = الراتب ÷ عدد أيام الشهر
   const allowedDailyAverage = totalDaysInMonth > 0 ? salary / totalDaysInMonth : 0;
 
-  // مؤشر الحالة اللوني:
-  // أخضر: التوقع أقل من الراتب بأمان
-  // أصفر: التوقع يقترب من الراتب (بين 85% و 100%)
-  // أحمر: التوقع سيتجاوز الراتب (عجز محتمل)
   let status = 'safe'; // 'safe' | 'warning' | 'danger'
   if (projectedEndMonth > salary) {
     status = 'danger';
@@ -113,4 +99,76 @@ export function calculateMonthForecast(totalSpentSoFar, salary = 4000, date = ne
     projectedRemaining,
     status,
   };
+}
+
+/**
+ * حساب حالة الهدف المالي (هدف ادخار أو سقف مصروفات)
+ */
+export function calculateGoalEvaluation(settings, totalSpentSoFar, forecast) {
+  const goalType = settings?.goalType || 'savings';
+  const target = Number(settings?.goalTargetAmount || 0);
+  const salary = Number(settings?.salary || 4000);
+  const currencySymbol = settings?.baseCurrency === 'USD' ? '$' : '₪';
+
+  if (!target || target <= 0 || goalType === 'none') {
+    return null;
+  }
+
+  if (goalType === 'savings') {
+    // هدف ادخار مبلغ معين (مثلاً ادخار 1000 ₪)
+    const currentSavings = Math.max(0, salary - totalSpentSoFar);
+    const projectedSavings = forecast.projectedRemaining;
+    const progressPct = Math.min(100, Math.round((currentSavings / target) * 100));
+
+    let status = 'on_track'; // 'on_track' | 'at_risk' | 'off_track'
+    let message = '';
+
+    if (projectedSavings >= target) {
+      status = 'on_track';
+      message = `أنت على المسار الصحيح! متوقع تدخر ${formatCurrency(projectedSavings, currencySymbol)} وتتجاوز هدفك (${formatCurrency(target, currencySymbol)} 🎯).`;
+    } else if (projectedSavings >= target * 0.75) {
+      status = 'at_risk';
+      message = `انتبه: بوتيرتك الحالية ستدخر تقريباً ${formatCurrency(projectedSavings, currencySymbol)}، وهو قريب من هدفك (${formatCurrency(target, currencySymbol)}).`;
+    } else {
+      status = 'off_track';
+      message = `خارج المسار: متوقع تدخر فقط ${formatCurrency(Math.max(0, projectedSavings), currencySymbol)}. تحتاج لترشيد الإنفاق بمقدار ${formatCurrency(target - projectedSavings, currencySymbol)} للوصول لهدفك!`;
+    }
+
+    return {
+      goalType,
+      target,
+      currentSavings,
+      projectedSavings,
+      progressPct,
+      status,
+      message,
+    };
+  } else {
+    // سقف أقصى للمصاريف (مثلاً لا تتجاوز مصاريفي 3000 ₪)
+    const projectedSpend = forecast.projectedEndMonth;
+    const progressPct = Math.min(100, Math.round((totalSpentSoFar / target) * 100));
+
+    let status = 'on_track';
+    let message = '';
+
+    if (projectedSpend <= target) {
+      status = 'on_track';
+      message = `ممتاز! متوقع إجمالي صرفك (${formatCurrency(projectedSpend, currencySymbol)}) يبقى تحت سقفك المحدد (${formatCurrency(target, currencySymbol)} 👍).`;
+    } else if (projectedSpend <= target * 1.08) {
+      status = 'at_risk';
+      message = `اقتربت من السقف: متوقع يصل صرفك إلى ${formatCurrency(projectedSpend, currencySymbol)} (سقفك: ${formatCurrency(target, currencySymbol)}).`;
+    } else {
+      status = 'off_track';
+      message = `تجاوز متوقع للسقف: بهذه الوتيرة ستصرف ${formatCurrency(projectedSpend, currencySymbol)} وتتجاوز السقف بـ ${formatCurrency(projectedSpend - target, currencySymbol)}!`;
+    }
+
+    return {
+      goalType,
+      target,
+      projectedSpend,
+      progressPct,
+      status,
+      message,
+    };
+  }
 }
