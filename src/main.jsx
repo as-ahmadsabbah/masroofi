@@ -17,13 +17,8 @@ class ErrorBoundary extends Component {
     console.error('Masroofi Error caught:', error, errorInfo);
   }
 
-  handleReset = () => {
-    try {
-      localStorage.clear();
-      window.location.reload();
-    } catch (e) {
-      window.location.reload();
-    }
+  handleRetry = () => {
+    this.setState({ hasError: false, error: null });
   };
 
   render() {
@@ -51,29 +46,15 @@ class ErrorBoundary extends Component {
             border: '1px solid rgba(255,255,255,0.1)',
             boxShadow: '0 20px 40px rgba(0,0,0,0.5)',
           }}>
-            <div style={{
-              width: '60px',
-              height: '60px',
-              borderRadius: '16px',
-              background: 'rgba(16, 185, 129, 0.15)',
-              border: '2px solid rgba(16, 185, 129, 0.4)',
-              margin: '0 auto 16px',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-            }}>
-              <img src="/logo.png" alt="مصروفي" style={{ width: '80%', height: '80%', objectFit: 'contain' }} />
-            </div>
-
-            <h2 style={{ fontSize: '1.3rem', fontWeight: 800, marginBottom: '8px' }}>
-              مرحباً بك في تطبيق مصروفي
+            <h2 style={{ fontSize: '1.25rem', fontWeight: 800, marginBottom: '8px' }}>
+              تطبيق مصروفي
             </h2>
-            <p style={{ fontSize: '0.85rem', color: '#94a3b8', marginBottom: '24px', lineHeight: 1.6 }}>
-              يبدو أن هناك بيانات مخزنة قديمة في متصفحك تحتاج لتحديث. اضغط الزر أدناه لبدء التطبيق مباشرة:
+            <p style={{ fontSize: '0.85rem', color: '#94a3b8', marginBottom: '20px', lineHeight: 1.6 }}>
+              بياناتك محفوظة وآمنة بالكامل. اضغط أدناه للمتابعة مباشرة:
             </p>
 
             <button
-              onClick={this.handleReset}
+              onClick={this.handleRetry}
               style={{
                 width: '100%',
                 padding: '14px',
@@ -87,7 +68,7 @@ class ErrorBoundary extends Component {
                 boxShadow: '0 8px 25px rgba(16, 185, 129, 0.35)',
               }}
             >
-              تحديث وفتح التطبيق الآن
+              متابعة إلى التطبيق
             </button>
           </div>
         </div>

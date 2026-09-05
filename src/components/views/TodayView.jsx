@@ -185,11 +185,12 @@ export default function TodayView({
         </div>
       )}
 
-      {/* 3. بطاقة الهدف المالي والادخار / سقف المصاريف الذكية */}
+      {/* 3. بطاقة الهدف المالي والادخار / سقف المصاريف الذكية والتنبؤ المالي */}
       <FinancialGoalCard
         goalEval={goalEval}
+        forecast={forecast}
         currencySymbol={currencySymbol}
-        onEditGoal={onOpenSetGoal}
+        onEditGoal={() => onOpenSetGoal()}
       />
 
       {/* 4. بطاقة "صرفت اليوم: X ₪" البارزة والأساسية */}

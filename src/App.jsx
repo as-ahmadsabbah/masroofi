@@ -189,12 +189,21 @@ export default function App() {
 
   // حفظ الهدف المالي لشهر محدد
   const handleSaveGoal = ({ goalType, goalTargetAmount, monthKey = currentMonthKey }) => {
-    storageService.saveGoalForMonth(monthKey, { goalType, goalTargetAmount });
-    if (monthKey === currentMonthKey) {
+    const safeKey = (typeof monthKey === 'string' && monthKey.includes('-')) ? monthKey : currentMonthKey;
+    storageService.saveGoalForMonth(safeKey, { goalType, goalTargetAmount });
+    if (safeKey === currentMonthKey) {
       setSettings(prev => ({ ...prev, goalType, goalTargetAmount }));
+      setCurrentMonthGoal(storageService.getGoalForMonth(currentMonthKey));
     }
     confetti({ particleCount: 45, spread: 60 });
     loadData();
+  };
+
+  // فتح نافذة تحديد الهدف المالي بشكل آمن
+  const handleOpenSetGoal = (mKey) => {
+    const safeKey = (typeof mKey === 'string' && mKey.includes('-')) ? mKey : currentMonthKey;
+    setTargetGoalMonthKey(safeKey);
+    setIsSetGoalOpen(true);
   };
 
   // حفظ المصاريف السابقة قبل استخدام التطبيق
@@ -316,10 +325,7 @@ export default function App() {
               setIsAddExpenseOpen(true);
             }}
             onDeleteExpense={handleDeleteExpense}
-            onOpenSetGoal={(mKey = currentMonthKey) => {
-              setTargetGoalMonthKey(mKey);
-              setIsSetGoalOpen(true);
-            }}
+            onOpenSetGoal={handleOpenSetGoal}
             onOpenSetPriorSpent={() => setIsSetPriorSpentOpen(true)}
             onOpenAddDailyRecurring={() => {
               setEditingDailyRecurring(null);
@@ -335,10 +341,8 @@ export default function App() {
             settings={settings}
             savingsSummary={savingsSummary}
             currentGoalEval={currentGoalEval}
-            onOpenSetGoal={(mKey = currentMonthKey) => {
-              setTargetGoalMonthKey(mKey);
-              setIsSetGoalOpen(true);
-            }}
+            forecast={forecast}
+            onOpenSetGoal={handleOpenSetGoal}
             currencySymbol={currencySymbol}
           />
         )}

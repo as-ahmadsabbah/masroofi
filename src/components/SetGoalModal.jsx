@@ -28,8 +28,12 @@ export default function SetGoalModal({
 
   if (!isOpen) return null;
 
+  const safeMonthKey = (typeof targetMonthKey === 'string' && targetMonthKey.includes('-'))
+    ? targetMonthKey
+    : getCurrentMonthKey();
+
   const currencySymbol = settings?.baseCurrency === 'USD' ? '$' : '₪';
-  const monthTitle = formatArabicMonth(targetMonthKey);
+  const monthTitle = formatArabicMonth(safeMonthKey);
 
   const handleSubmit = (e) => {
     e.preventDefault();
@@ -37,7 +41,7 @@ export default function SetGoalModal({
       onSave({
         goalType: 'none',
         goalTargetAmount: 0,
-        monthKey: targetMonthKey,
+        monthKey: safeMonthKey,
       });
     } else {
       const num = Number(targetAmount);
@@ -48,7 +52,7 @@ export default function SetGoalModal({
       onSave({
         goalType,
         goalTargetAmount: num,
-        monthKey: targetMonthKey,
+        monthKey: safeMonthKey,
       });
     }
     onClose();
@@ -58,7 +62,7 @@ export default function SetGoalModal({
     onSave({
       goalType: 'none',
       goalTargetAmount: 0,
-      monthKey: targetMonthKey,
+      monthKey: safeMonthKey,
     });
     onClose();
   };

@@ -19,6 +19,7 @@ export default function SavingsAndGoalsView({
   settings,
   savingsSummary,
   currentGoalEval,
+  forecast,
   onOpenSetGoal,
   currencySymbol = '₪',
 }) {
@@ -88,6 +89,7 @@ export default function SavingsAndGoalsView({
 
         <FinancialGoalCard
           goalEval={currentGoalEval}
+          forecast={forecast}
           currencySymbol={currencySymbol}
           onEditGoal={() => onOpenSetGoal()}
         />

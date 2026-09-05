@@ -51,8 +51,17 @@ export function formatArabicDateFull(dateStr) {
 }
 
 export function formatArabicMonth(monthKey) {
-  if (!monthKey) return '';
+  if (!monthKey || typeof monthKey !== 'string' || !monthKey.includes('-')) {
+    const today = new Date();
+    const [y, m] = [today.getFullYear(), today.getMonth() + 1];
+    const d = new Date(y, m - 1, 1);
+    return d.toLocaleDateString('ar-SA-u-ca-gregory', {
+      month: 'long',
+      year: 'numeric',
+    });
+  }
   const [year, month] = monthKey.split('-').map(Number);
+  if (!year || !month) return '';
   const d = new Date(year, month - 1, 1);
   return d.toLocaleDateString('ar-SA-u-ca-gregory', {
     month: 'long',

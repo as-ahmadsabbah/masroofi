@@ -350,9 +350,10 @@ export const storageService = {
   },
 
   getGoalForMonth(monthKey = getCurrentMonthKey()) {
+    const safeMonthKey = (typeof monthKey === 'string' && monthKey.includes('-')) ? monthKey : getCurrentMonthKey();
     const goals = this.getMonthlyGoals();
-    if (goals && goals[monthKey]) {
-      return goals[monthKey];
+    if (goals && goals[safeMonthKey]) {
+      return goals[safeMonthKey];
     }
     const settings = this.getSettings();
     if (settings.goalType && settings.goalType !== 'none' && Number(settings.goalTargetAmount) > 0) {
@@ -370,11 +371,12 @@ export const storageService = {
   },
 
   saveGoalForMonth(monthKey, goalData) {
+    const safeMonthKey = (typeof monthKey === 'string' && monthKey.includes('-')) ? monthKey : getCurrentMonthKey();
     const goals = this.getMonthlyGoals();
     const cleanGoalType = goalData.goalType === 'spend_limit' ? 'spend_limit' : (goalData.goalType === 'savings' ? 'savings' : 'none');
     const cleanAmount = cleanGoalType === 'none' ? 0 : (Number(goalData.goalTargetAmount) || 0);
 
-    goals[monthKey] = {
+    goals[safeMonthKey] = {
       goalType: cleanGoalType,
       goalTargetAmount: cleanAmount,
       updatedAt: new Date().toISOString(),
@@ -382,7 +384,7 @@ export const storageService = {
     this.saveMonthlyGoals(goals);
 
     // تحديث الإعدادات العامة لتبقى متوافقة
-    if (monthKey === getCurrentMonthKey()) {
+    if (safeMonthKey === getCurrentMonthKey()) {
       const s = this.getSettings();
       this.saveSettings({
         ...s,
@@ -391,7 +393,7 @@ export const storageService = {
       });
     }
 
-    return goals[monthKey];
+    return goals[safeMonthKey];
   },
 
   // --- تقرير المدخرات التراكمية عبر كافة الأشهر (All-Time Savings Summary) ---
