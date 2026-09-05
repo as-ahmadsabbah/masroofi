@@ -243,6 +243,8 @@ export default function App() {
     (sum, e) => sum + Number(e.convertedAmount || e.amount || 0),
     0
   );
+  const totalMonthSpent = regularMonthTotal + priorSpentAmount;
+
   const forecast = calculateMonthForecast({
     totalSpentSoFar: totalMonthSpent,
     salary,

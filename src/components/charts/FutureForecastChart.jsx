@@ -1,12 +1,11 @@
 import React, { useState } from 'react';
-import { Sparkles, TrendingUp, CheckCircle2, AlertTriangle, AlertCircle } from 'lucide-react';
+import { Sparkles } from 'lucide-react';
 import { formatCurrency } from '../../utils/dateUtils';
 
 export default function FutureForecastChart({
   monthExpenses = [],
   salary = 2000,
   priorSpentAmount = 0,
-  dailyRecurring = [],
   forecast,
   currencySymbol = '₪',
   isDark = true,
