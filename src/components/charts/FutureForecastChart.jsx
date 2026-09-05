@@ -1,14 +1,6 @@
 import React, { useState } from 'react';
-import { Chart as ChartJS, registerables } from 'chart.js';
-import { Line } from 'react-chartjs-2';
-import { Sparkles, TrendingUp, AlertTriangle, CheckCircle2, ShieldAlert, Calendar } from 'lucide-react';
-import { formatCurrency, getCurrentMonthKey } from '../../utils/dateUtils';
-
-try {
-  ChartJS.register(...registerables);
-} catch (e) {
-  console.warn('ChartJS registration warning in FutureForecastChart:', e);
-}
+import { Sparkles, TrendingUp, CheckCircle2, AlertTriangle, AlertCircle } from 'lucide-react';
+import { formatCurrency } from '../../utils/dateUtils';
 
 export default function FutureForecastChart({
   monthExpenses = [],
@@ -19,16 +11,16 @@ export default function FutureForecastChart({
   currencySymbol = '₪',
   isDark = true,
 }) {
-  const [hasError, setHasError] = useState(false);
+  const [hoveredPoint, setHoveredPoint] = useState(null);
 
   const today = new Date();
-  const currentDay = today.getDate();
+  const currentDay = Math.max(1, today.getDate());
   const year = today.getFullYear();
   const month = today.getMonth();
-  const totalDaysInMonth = new Date(year, month + 1, 0).getDate();
+  const totalDaysInMonth = new Date(year, month + 1, 0).getDate() || 30;
   const monthStr = String(month + 1).padStart(2, '0');
 
-  // حساب المصروف اليومي التراكمي الفعلي
+  // جمع المصاريف الفعلية اليومية
   const dailyExpensesMap = {};
   (monthExpenses || []).forEach((e) => {
     if (e && e.date) {
@@ -36,161 +28,96 @@ export default function FutureForecastChart({
     }
   });
 
-  const dailyRate = forecast?.dailyAverage || 20;
+  const dailyRate = Number(forecast?.dailyAverage) || 20;
 
-  // إعداد نقاط البيانات التراكمية لكل يوم في الشهر
-  const labels = [];
-  const actualCumulativeData = [];
-  const forecastCumulativeData = [];
-  const salaryLimitData = [];
-
-  let runningActual = priorSpentAmount;
+  // إعداد البيانات لجميع أيام الشهر
+  const points = [];
+  let runningActual = Number(priorSpentAmount) || 0;
 
   for (let d = 1; d <= totalDaysInMonth; d++) {
-    labels.push(`${d}`);
-    salaryLimitData.push(salary);
-
     const dayDateStr = `${year}-${monthStr}-${String(d).padStart(2, '0')}`;
     const daySpent = dailyExpensesMap[dayDateStr] || 0;
 
     if (d <= currentDay) {
       runningActual += daySpent;
-      actualCumulativeData.push(Math.round(runningActual));
-      // عند اليوم الحالي نجعل نقطة التلاقي للتوقع التخيلي
-      if (d === currentDay) {
-        forecastCumulativeData.push(Math.round(runningActual));
-      } else {
-        forecastCumulativeData.push(null);
-      }
+      points.push({
+        day: d,
+        dateStr: dayDateStr,
+        actual: Math.round(runningActual),
+        forecast: d === currentDay ? Math.round(runningActual) : null,
+        isToday: d === currentDay,
+        isFuture: false,
+      });
     } else {
-      // أيام المستقبل بعد اليوم الحالي: المسار التخيلي
-      actualCumulativeData.push(null);
       const daysAhead = d - currentDay;
-      const projectedVal = Math.round(runningActual + (daysAhead * dailyRate));
-      forecastCumulativeData.push(projectedVal);
+      const proj = Math.round(runningActual + (daysAhead * dailyRate));
+      points.push({
+        day: d,
+        dateStr: dayDateStr,
+        actual: null,
+        forecast: proj,
+        isToday: false,
+        isFuture: true,
+      });
     }
   }
 
-  // إعدادات Chart.js
-  const chartData = {
-    labels,
-    datasets: [
-      {
-        label: 'الإنفاق الفعلي حتى اليوم',
-        data: actualCumulativeData,
-        borderColor: '#10b981',
-        backgroundColor: 'rgba(16, 185, 129, 0.18)',
-        borderWidth: 3,
-        fill: true,
-        tension: 0.3,
-        pointBackgroundColor: '#10b981',
-        pointRadius: (ctx) => (ctx.dataIndex === currentDay - 1 ? 6 : 2),
-        pointHoverRadius: 7,
-      },
-      {
-        label: 'المسار التخيلي لباقي الشهر 🔮',
-        data: forecastCumulativeData,
-        borderColor: '#8b5cf6',
-        backgroundColor: 'rgba(139, 92, 246, 0.08)',
-        borderWidth: 2.5,
-        borderDash: [6, 4],
-        fill: true,
-        tension: 0.1,
-        pointBackgroundColor: '#8b5cf6',
-        pointRadius: (ctx) => (ctx.dataIndex === totalDaysInMonth - 1 ? 6 : 2),
-        pointHoverRadius: 7,
-      },
-      {
-        label: `سقف الراتب (${formatCurrency(salary, currencySymbol)})`,
-        data: salaryLimitData,
-        borderColor: 'rgba(239, 68, 68, 0.65)',
-        borderWidth: 1.5,
-        borderDash: [4, 4],
-        pointRadius: 0,
-        fill: false,
-      },
-    ],
-  };
-
-  const chartOptions = {
-    responsive: true,
-    maintainAspectRatio: false,
-    interaction: {
-      mode: 'index',
-      intersect: false,
-    },
-    plugins: {
-      legend: {
-        position: 'top',
-        rtl: true,
-        labels: {
-          color: isDark ? '#cbd5e1' : '#475569',
-          font: { family: "'Alexandria', sans-serif", size: 11, weight: '600' },
-          usePointStyle: true,
-          padding: 14,
-        },
-      },
-      tooltip: {
-        rtl: true,
-        backgroundColor: isDark ? '#0f172a' : '#ffffff',
-        titleColor: isDark ? '#f8fafc' : '#0f172a',
-        bodyColor: isDark ? '#cbd5e1' : '#334155',
-        borderColor: 'rgba(255,255,255,0.1)',
-        borderWidth: 1,
-        padding: 10,
-        callbacks: {
-          title: (items) => `يوم ${items[0].label} من الشهر`,
-          label: (context) => {
-            const val = context.raw;
-            if (val === null || val === undefined) return '';
-            return `${context.dataset.label}: ${formatCurrency(val, currencySymbol)}`;
-          },
-        },
-      },
-    },
-    scales: {
-      x: {
-        grid: { color: isDark ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.05)' },
-        ticks: {
-          color: isDark ? '#94a3b8' : '#64748b',
-          font: { family: "'Alexandria', sans-serif", size: 10 },
-          maxRotation: 0,
-          callback: function(val, index) {
-            // إظهار الأيام الهامة فقط لتفادي الازدحام
-            const dayNum = index + 1;
-            if (dayNum === 1 || dayNum === currentDay || dayNum % 5 === 0 || dayNum === totalDaysInMonth) {
-              return `يوم ${dayNum}`;
-            }
-            return '';
-          },
-        },
-      },
-      y: {
-        grid: { color: isDark ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.05)' },
-        ticks: {
-          color: isDark ? '#94a3b8' : '#64748b',
-          font: { family: "'Alexandria', sans-serif", size: 10 },
-          callback: (value) => `${value} ${currencySymbol}`,
-        },
-      },
-    },
-  };
-
   const totalSpentSoFar = Math.round(runningActual);
   const remainingDays = Math.max(0, totalDaysInMonth - currentDay);
-  const futureSpend = forecast?.projectedFutureSpend || (remainingDays * dailyRate);
-  const projectedEndMonth = forecast?.projectedEndMonth || (totalSpentSoFar + futureSpend);
+  const futureSpend = Number(forecast?.projectedFutureSpend) || (remainingDays * dailyRate);
+  const projectedEndMonth = Number(forecast?.projectedEndMonth) || (totalSpentSoFar + futureSpend);
   const projectedRemaining = salary - projectedEndMonth;
+
+  // إعداد إحداثيات الرسم البياني SVG
+  const svgWidth = 600;
+  const svgHeight = 220;
+  const paddingX = 45;
+  const paddingY = 30;
+  const chartW = svgWidth - paddingX * 2;
+  const chartH = svgHeight - paddingY * 2;
+
+  const maxVal = Math.max(salary * 1.15, projectedEndMonth * 1.15, totalSpentSoFar * 1.15, 100);
+
+  const getX = (day) => paddingX + ((day - 1) / (totalDaysInMonth - 1)) * chartW;
+  const getY = (val) => svgHeight - paddingY - (val / maxVal) * chartH;
+
+  // مسار الخط الفعلي (Actual Path)
+  const actualPoints = points.filter(p => p.actual !== null);
+  let actualPathD = '';
+  actualPoints.forEach((p, idx) => {
+    const x = getX(p.day);
+    const y = getY(p.actual);
+    actualPathD += idx === 0 ? `M ${x} ${y}` : ` L ${x} ${y}`;
+  });
+
+  // مسار التعبئة المظللة للفعلي
+  let actualAreaD = '';
+  if (actualPoints.length > 0) {
+    const firstX = getX(actualPoints[0].day);
+    const lastX = getX(actualPoints[actualPoints.length - 1].day);
+    const bottomY = svgHeight - paddingY;
+    actualAreaD = `${actualPathD} L ${lastX} ${bottomY} L ${firstX} ${bottomY} Z`;
+  }
+
+  // مسار الخط التخيلي (Forecast Path)
+  const forecastPoints = points.filter(p => p.forecast !== null);
+  let forecastPathD = '';
+  forecastPoints.forEach((p, idx) => {
+    const x = getX(p.day);
+    const y = getY(p.forecast);
+    forecastPathD += idx === 0 ? `M ${x} ${y}` : ` L ${x} ${y}`;
+  });
+
+  const salaryY = getY(salary);
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
-      {/* بطاقات الإحصاءات التوضيحية السريعة */}
+      {/* 1. بطاقات الإحصاءات السريعة */}
       <div style={{
         display: 'grid',
         gridTemplateColumns: 'repeat(auto-fit, minmax(130px, 1fr))',
         gap: '8px',
       }}>
-        {/* الفعلي حتى اليوم */}
         <div style={{
           background: 'var(--bg-app)',
           padding: '10px 12px',
@@ -205,7 +132,6 @@ export default function FutureForecastChart({
           </strong>
         </div>
 
-        {/* التوقع لباقي الشهر */}
         <div style={{
           background: 'var(--bg-app)',
           padding: '10px 12px',
@@ -220,7 +146,6 @@ export default function FutureForecastChart({
           </strong>
         </div>
 
-        {/* المتوقع الإجمالي نهاية الشهر */}
         <div style={{
           background: 'var(--bg-app)',
           padding: '10px 12px',
@@ -239,7 +164,6 @@ export default function FutureForecastChart({
           </strong>
         </div>
 
-        {/* الفائض المالي المتوقع */}
         <div style={{
           background: 'var(--bg-app)',
           padding: '10px 12px',
@@ -259,28 +183,209 @@ export default function FutureForecastChart({
         </div>
       </div>
 
-      {/* منطقة الرسم البياني */}
-      <div style={{ height: '240px', width: '100%', position: 'relative' }}>
-        {!hasError ? (
-          <Line
-            data={chartData}
-            options={chartOptions}
-            onError={() => setHasError(true)}
-          />
-        ) : (
-          <div style={{
-            height: '100%',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            background: 'var(--bg-app)',
-            borderRadius: 'var(--radius-md)',
-            color: 'var(--text-muted)',
-            fontSize: '0.85rem',
-          }}>
-            <span>مسار التوقع التخيلي: متوقع تصرف {formatCurrency(projectedEndMonth, currencySymbol)} بنهاية الشهر</span>
+      {/* 2. الرسم البياني التفاعلي الفائق السلاسة */}
+      <div style={{
+        background: 'var(--bg-app)',
+        borderRadius: 'var(--radius-lg)',
+        border: '1px solid var(--border-subtle)',
+        padding: '16px 12px 10px',
+        position: 'relative',
+        overflow: 'hidden',
+      }}>
+        {/* مفتاح الدلالات (Legend) */}
+        <div style={{
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          gap: '16px',
+          flexWrap: 'wrap',
+          marginBottom: '10px',
+          fontSize: '0.76rem',
+        }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+            <span style={{ width: '12px', height: '3px', background: '#10b981', borderRadius: '2px' }} />
+            <span style={{ color: 'var(--text-primary)', fontWeight: 600 }}>الإنفاق الفعلي حتى اليوم</span>
           </div>
-        )}
+
+          <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+            <span style={{ width: '12px', height: '3px', background: '#8b5cf6', borderTop: '2px dashed #8b5cf6' }} />
+            <span style={{ color: '#a78bfa', fontWeight: 600 }}>المسار التخيلي المتوقع 🔮</span>
+          </div>
+
+          <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+            <span style={{ width: '12px', height: '2px', background: '#ef4444', borderTop: '1px dashed #ef4444' }} />
+            <span style={{ color: '#ef4444', fontWeight: 600 }}>سقف الراتب ({formatCurrency(salary, currencySymbol)})</span>
+          </div>
+        </div>
+
+        {/* مساحة الرسم SVG */}
+        <div style={{ width: '100%', height: '220px', position: 'relative' }}>
+          <svg
+            viewBox={`0 0 ${svgWidth} ${svgHeight}`}
+            style={{ width: '100%', height: '100%', overflow: 'visible' }}
+            preserveAspectRatio="none"
+          >
+            <defs>
+              <linearGradient id="actualGrad" x1="0" y1="0" x2="0" y2="1">
+                <stop offset="0%" stopColor="#10b981" stopOpacity="0.3" />
+                <stop offset="100%" stopColor="#10b981" stopOpacity="0.0" />
+              </linearGradient>
+              <linearGradient id="forecastGrad" x1="0" y1="0" x2="0" y2="1">
+                <stop offset="0%" stopColor="#8b5cf6" stopOpacity="0.2" />
+                <stop offset="100%" stopColor="#8b5cf6" stopOpacity="0.0" />
+              </linearGradient>
+            </defs>
+
+            {/* خطوط الشبكة الأفقية */}
+            {[0, 0.33, 0.66, 1].map((ratio, i) => {
+              const y = svgHeight - paddingY - ratio * chartH;
+              const val = Math.round(ratio * maxVal);
+              return (
+                <g key={i}>
+                  <line
+                    x1={paddingX}
+                    y1={y}
+                    x2={svgWidth - paddingX}
+                    y2={y}
+                    stroke={isDark ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.06)'}
+                    strokeDasharray="3 3"
+                  />
+                  <text
+                    x={paddingX - 6}
+                    y={y + 3}
+                    textAnchor="end"
+                    fill="var(--text-muted)"
+                    fontSize="9"
+                    fontFamily="'Alexandria', sans-serif"
+                  >
+                    {val}
+                  </text>
+                </g>
+              );
+            })}
+
+            {/* خط سقف الراتب */}
+            <line
+              x1={paddingX}
+              y1={salaryY}
+              x2={svgWidth - paddingX}
+              y2={salaryY}
+              stroke="rgba(239, 68, 68, 0.7)"
+              strokeWidth="1.5"
+              strokeDasharray="4 4"
+            />
+            <text
+              x={svgWidth - paddingX}
+              y={salaryY - 5}
+              textAnchor="end"
+              fill="#ef4444"
+              fontSize="9"
+              fontWeight="bold"
+              fontFamily="'Alexandria', sans-serif"
+            >
+              سقف الراتب ({salary} {currencySymbol})
+            </text>
+
+            {/* مساحة التظليل الفعلي */}
+            {actualAreaD && (
+              <path d={actualAreaD} fill="url(#actualGrad)" />
+            )}
+
+            {/* خط المسار التخيلي */}
+            {forecastPathD && (
+              <path
+                d={forecastPathD}
+                fill="none"
+                stroke="#8b5cf6"
+                strokeWidth="2.5"
+                strokeDasharray="6 4"
+              />
+            )}
+
+            {/* خط المسار الفعلي */}
+            {actualPathD && (
+              <path
+                d={actualPathD}
+                fill="none"
+                stroke="#10b981"
+                strokeWidth="3"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+              />
+            )}
+
+            {/* نقاط الأيام الهامة والأيام التفاعلية */}
+            {points.map((p) => {
+              const x = getX(p.day);
+              const val = p.actual !== null ? p.actual : p.forecast;
+              const y = getY(val);
+              const isMajor = p.day === 1 || p.isToday || p.day === totalDaysInMonth || p.day % 5 === 0;
+
+              return (
+                <g key={p.day}>
+                  {/* تسميات الأيام على المحور السيني */}
+                  {isMajor && (
+                    <text
+                      x={x}
+                      y={svgHeight - paddingY + 16}
+                      textAnchor="middle"
+                      fill={p.isToday ? 'var(--brand-500)' : 'var(--text-muted)'}
+                      fontSize="9"
+                      fontWeight={p.isToday ? 'bold' : 'normal'}
+                      fontFamily="'Alexandria', sans-serif"
+                    >
+                      {p.isToday ? `اليوم (${p.day})` : p.day}
+                    </text>
+                  )}
+
+                  {/* نقاط المنحنى */}
+                  {isMajor && (
+                    <circle
+                      cx={x}
+                      y={y}
+                      r={p.isToday ? 5.5 : 3.5}
+                      fill={p.isToday ? '#10b981' : (p.isFuture ? '#8b5cf6' : '#10b981')}
+                      stroke="#0f172a"
+                      strokeWidth="1.5"
+                      style={{ cursor: 'pointer', transition: 'r 0.15s ease' }}
+                      onMouseEnter={() => setHoveredPoint(p)}
+                    />
+                  )}
+                </g>
+              );
+            })}
+          </svg>
+
+          {/* نافذة التلميح السريعة عند التمرير */}
+          {hoveredPoint && (
+            <div style={{
+              position: 'absolute',
+              top: '10px',
+              left: '50%',
+              transform: 'translateX(-50%)',
+              background: '#0f172a',
+              border: '1px solid rgba(255,255,255,0.15)',
+              padding: '6px 12px',
+              borderRadius: '8px',
+              fontSize: '0.78rem',
+              color: '#f8fafc',
+              boxShadow: '0 4px 15px rgba(0,0,0,0.4)',
+              zIndex: 10,
+              pointerEvents: 'none',
+              display: 'flex',
+              alignItems: 'center',
+              gap: '8px',
+            }}>
+              <span>يوم {hoveredPoint.day}:</span>
+              <strong style={{ color: hoveredPoint.isFuture ? '#a78bfa' : 'var(--color-success)' }}>
+                {formatCurrency(hoveredPoint.actual !== null ? hoveredPoint.actual : hoveredPoint.forecast, currencySymbol)}
+              </strong>
+              <span style={{ fontSize: '0.7rem', color: 'var(--text-muted)' }}>
+                ({hoveredPoint.isFuture ? 'تخيلي متوقع' : 'فعلي تراكمي'})
+              </span>
+            </div>
+          )}
+        </div>
       </div>
 
       <div style={{
