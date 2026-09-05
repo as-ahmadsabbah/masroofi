@@ -1,43 +1,36 @@
 import React from 'react';
-import { Sun, Moon, PlusCircle, Lock, Calendar, DollarSign, Wallet } from 'lucide-react';
-import { formatArabicMonth } from '../utils/dateUtils';
+import { Sun, Moon, Lock } from 'lucide-react';
 
 export default function Header({
   settings,
-  activeMonth,
-  setActiveMonth,
-  availableMonths = [],
-  onOpenAddExpense,
-  onOpenAddIncome,
   onToggleTheme,
   onLockApp,
   isPinEnabled,
 }) {
   return (
     <header className="glass-card" style={{
-      borderRadius: '0 0 24px 24px',
-      margin: '0 0 24px 0',
-      padding: '16px 24px',
+      borderRadius: '0 0 20px 20px',
+      margin: '0 0 20px 0',
+      padding: '14px 20px',
       position: 'sticky',
       top: 0,
       zIndex: 50,
-      boxShadow: '0 4px 20px rgba(0,0,0,0.08)'
+      boxShadow: '0 4px 20px rgba(0,0,0,0.06)'
     }}>
       <div style={{
         display: 'flex',
         alignItems: 'center',
         justifyContent: 'space-between',
-        flexWrap: 'wrap',
-        gap: '16px',
+        gap: '12px',
       }}>
-        {/* الهوية البصرية والشعار */}
-        <div style={{ display: 'flex', alignItems: 'center', gap: '14px' }}>
+        {/* الشعار واسم التطبيق */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
           <div style={{
-            width: '52px',
-            height: '52px',
-            borderRadius: '16px',
+            width: '46px',
+            height: '46px',
+            borderRadius: '14px',
             overflow: 'hidden',
-            boxShadow: '0 4px 14px rgba(16, 185, 129, 0.3)',
+            boxShadow: '0 4px 12px rgba(16, 185, 129, 0.25)',
             border: '2px solid rgba(16, 185, 129, 0.4)',
             background: '#ffffff',
             display: 'flex',
@@ -46,99 +39,43 @@ export default function Header({
           }}>
             <img
               src="/logo.png"
-              alt="شعار مصروفي"
+              alt="مصروفي"
               style={{ width: '100%', height: '100%', objectFit: 'contain' }}
             />
           </div>
           <div>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-              <h1 style={{ fontSize: '1.45rem', fontWeight: 800, margin: 0, lineHeight: 1.2 }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+              <h1 style={{ fontSize: '1.35rem', fontWeight: 800, margin: 0, lineHeight: 1.2 }}>
                 مصروفي
               </h1>
-              <span className="badge badge-success" style={{ fontSize: '0.72rem' }}>
-                الميزانية الذكية
+              <span className="badge badge-success" style={{ fontSize: '0.68rem', padding: '1px 6px' }}>
+                يومي
               </span>
             </div>
-            <p style={{ fontSize: '0.8rem', color: 'var(--text-muted)', margin: 0 }}>
-              إدارة المصاريف وتنمية المدخرات الشخصية
+            <p style={{ fontSize: '0.78rem', color: 'var(--text-muted)', margin: 0 }}>
+              دفتر مصاريفك اليومي السريع
             </p>
           </div>
         </div>
 
-        {/* محدد الشهر المالي والإجراءات */}
-        <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flexWrap: 'wrap' }}>
-          {/* محدد الشهر المالي النشط */}
-          <div style={{
-            display: 'flex',
-            alignItems: 'center',
-            gap: '8px',
-            background: 'var(--bg-app)',
-            padding: '6px 12px',
-            borderRadius: 'var(--radius-md)',
-            border: '1px solid var(--border-subtle)',
-          }}>
-            <Calendar size={18} color="var(--brand-500)" />
-            <select
-              value={activeMonth}
-              onChange={(e) => setActiveMonth(e.target.value)}
-              style={{
-                background: 'transparent',
-                border: 'none',
-                color: 'var(--text-primary)',
-                fontFamily: 'var(--font-main)',
-                fontSize: '0.88rem',
-                fontWeight: 600,
-                outline: 'none',
-                cursor: 'pointer',
-              }}
-            >
-              {availableMonths.map((mKey) => (
-                <option key={mKey} value={mKey} style={{ background: 'var(--bg-surface)' }}>
-                  {formatArabicMonth(mKey)}
-                </option>
-              ))}
-            </select>
-          </div>
-
-          {/* زر إضافة دخل إضافي */}
-          <button
-            className="btn btn-secondary btn-sm"
-            onClick={onOpenAddIncome}
-            title="تسجيل دخل إضافي (فريلانس / مكافأة)"
-            style={{ display: 'flex', alignItems: 'center', gap: '6px' }}
-          >
-            <Wallet size={16} color="var(--brand-500)" />
-            <span>+ دخل إضافي</span>
-          </button>
-
-          {/* زر إضافة مصروف فوري */}
-          <button
-            className="btn btn-primary btn-sm"
-            onClick={onOpenAddExpense}
-            title="تسجيل مصروف جديد سريع"
-          >
-            <PlusCircle size={16} />
-            <span>+ مصروف جديد</span>
-          </button>
-
-          {/* قفل التطبيق إذا كان مفعلاً */}
+        {/* أزرار التحكم */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
           {isPinEnabled && (
             <button
-              className="btn btn-secondary btn-icon"
+              className="btn btn-secondary btn-icon btn-sm"
               onClick={onLockApp}
-              title="قفل التطبيق برقم سري"
+              title="قفل التطبيق برمز الأمان"
             >
-              <Lock size={18} />
+              <Lock size={16} />
             </button>
           )}
 
-          {/* تبديل الوضع الليلي والنهاري */}
           <button
-            className="btn btn-secondary btn-icon"
+            className="btn btn-secondary btn-icon btn-sm"
             onClick={onToggleTheme}
             title={settings.theme === 'dark' ? 'التحويل للوضع النهاري' : 'التحويل للوضع الليلي'}
           >
-            {settings.theme === 'dark' ? <Sun size={18} color="#f59e0b" /> : <Moon size={18} color="#6366f1" />}
+            {settings.theme === 'dark' ? <Sun size={16} color="#f59e0b" /> : <Moon size={16} color="#6366f1" />}
           </button>
         </div>
       </div>

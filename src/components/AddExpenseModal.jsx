@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
-import { X, Plus, AlertTriangle, AlertCircle, RefreshCw, Check } from 'lucide-react';
+import { X, Check, ChevronDown, ChevronUp, Calendar, FileText } from 'lucide-react';
 import CategoryIcon from './CategoryIcon';
-import { formatDateIso, formatCurrency } from '../utils/dateUtils';
+import { getTodayIso } from '../utils/dateUtils';
 
 export default function AddExpenseModal({
   isOpen,
@@ -9,184 +9,100 @@ export default function AddExpenseModal({
   onSave,
   categories = [],
   settings,
-  currentExpenses = [],
   editingExpense = null,
+  initialCategory = null,
 }) {
+  const [categoryId, setCategoryId] = useState('');
   const [amount, setAmount] = useState('');
-  const [currency, setCurrency] = useState(settings?.baseCurrency || 'SAR');
-  const [categoryId, setCategoryId] = useState(categories[0]?.id || 'food');
-  const [date, setDate] = useState(formatDateIso(new Date()));
+  const [currency, setCurrency] = useState(settings?.baseCurrency || 'ILS');
+  const [showMore, setShowMore] = useState(false);
+  const [date, setDate] = useState(getTodayIso());
   const [note, setNote] = useState('');
-  const [isRecurring, setIsRecurring] = useState(false);
 
   useEffect(() => {
     if (editingExpense) {
-      setAmount(editingExpense.amount);
-      setCurrency(editingExpense.currency || settings?.baseCurrency || 'SAR');
       setCategoryId(editingExpense.categoryId);
+      setAmount(editingExpense.amount);
+      setCurrency(editingExpense.currency || 'ILS');
       setDate(editingExpense.date);
       setNote(editingExpense.note || '');
-      setIsRecurring(!!editingExpense.isRecurring);
+      setShowMore(!!editingExpense.note || editingExpense.date !== getTodayIso());
     } else {
-      setAmount('');
-      setCurrency(settings?.baseCurrency || 'SAR');
-      setCategoryId(categories[0]?.id || 'food');
-      setDate(formatDateIso(new Date()));
+      const defaultCat = initialCategory || categories[0];
+      if (defaultCat) {
+        setCategoryId(defaultCat.id);
+        setAmount(defaultCat.defaultAmount ? String(defaultCat.defaultAmount) : '');
+      }
+      setCurrency(settings?.baseCurrency || 'ILS');
+      setDate(getTodayIso());
       setNote('');
-      setIsRecurring(false);
+      setShowMore(false);
     }
-  }, [editingExpense, isOpen, categories, settings]);
+  }, [editingExpense, initialCategory, isOpen, categories, settings]);
 
   if (!isOpen) return null;
 
-  // حساب سعر التحويل للعملة الأساسية
-  const baseCurrency = settings?.baseCurrency || 'SAR';
-  const selectedCurrencyObj = settings?.currencies?.find(c => c.code === currency);
-  const baseCurrencyObj = settings?.currencies?.find(c => c.code === baseCurrency);
-  const rate = selectedCurrencyObj ? (selectedCurrencyObj.rateToBase || 1) : 1;
-  const convertedAmount = (Number(amount) || 0) * rate;
-
-  // حساب ميزانية الفئة المحددة والمصروف الفعلي حتى الآن
-  const category = categories.find(c => c.id === categoryId);
-  const salary = Number(settings?.salary || 0);
-  
-  let plannedLimit = 0;
-  if (category) {
-    if (category.limitType === 'percentage') {
-      plannedLimit = (salary * (category.limitValue || 0)) / 100;
-    } else {
-      plannedLimit = Number(category.limitValue || 0);
+  const handleSelectCategory = (cat) => {
+    setCategoryId(cat.id);
+    if (cat.defaultAmount) {
+      setAmount(String(cat.defaultAmount));
     }
-  }
-
-  // المصروف الفعلي الحالي لهذه الفئة (باستثناء المصروف قيد التعديل إن وجد)
-  const currentCategorySpent = currentExpenses
-    .filter(e => e.categoryId === categoryId && (!editingExpense || e.id !== editingExpense.id))
-    .reduce((sum, e) => sum + Number(e.convertedAmount || e.amount || 0), 0);
-
-  const projectedSpent = currentCategorySpent + convertedAmount;
-  const projectedPercent = plannedLimit > 0 ? (projectedSpent / plannedLimit) * 100 : 0;
-  const isOverLimit = plannedLimit > 0 && projectedSpent > plannedLimit;
-  const isNearLimit = plannedLimit > 0 && projectedPercent >= 90 && !isOverLimit;
-
-  // إجمالي مصاريف الشهر مع المصروف الجديد
-  const totalSpentAll = currentExpenses
-    .filter(e => !editingExpense || e.id !== editingExpense.id)
-    .reduce((sum, e) => sum + Number(e.convertedAmount || e.amount || 0), 0) + convertedAmount;
-  const isBudgetDeficit = salary > 0 && totalSpentAll > salary;
+  };
 
   const handleSubmit = (e) => {
     e.preventDefault();
-    if (!amount || Number(amount) <= 0) return;
+    const num = Number(amount);
+    if (!num || num <= 0) return;
+
+    const selectedCat = categories.find(c => c.id === categoryId);
+
+    // تحويل المبلغ إذا كان بالدولار
+    const rate = currency === 'USD' ? (settings?.currencies?.find(c => c.code === 'USD')?.rateToBase || 3.65) : 1;
+    const convertedAmount = currency === 'USD' ? num * rate : num;
 
     onSave({
-      id: editingExpense ? editingExpense.id : undefined,
-      amount: Number(amount),
+      id: editingExpense?.id,
+      amount: num,
       currency,
       convertedAmount,
       categoryId,
-      date,
-      note,
-      isRecurring,
+      categoryName: selectedCat?.name || 'مصروف',
+      date: date || getTodayIso(),
+      note: note.trim(),
     });
+
     onClose();
   };
 
-  const quickNotes = ['تموينات غذائية', 'مطعم وكافيه', 'بنزين', 'صيدلية', 'تسوق متجر', 'فاتورة إنترنت'];
+  const currentCat = categories.find(c => c.id === categoryId) || categories[0];
 
   return (
     <div className="modal-overlay" onClick={(e) => e.target === e.currentTarget && onClose()}>
-      <div className="modal-content" style={{ maxWidth: '520px' }}>
+      <div className="modal-content" style={{ maxWidth: '440px', padding: '24px 20px' }}>
         {/* رأس النافذة */}
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '20px' }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-            <div style={{
-              width: '40px',
-              height: '40px',
-              borderRadius: 'var(--radius-md)',
-              background: 'var(--brand-gradient)',
-              color: '#fff',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-            }}>
-              <Plus size={22} />
-            </div>
-            <h2 style={{ fontSize: '1.25rem', fontWeight: 800 }}>
-              {editingExpense ? 'تعديل المصروف' : 'تسجيل مصروف جديد'}
-            </h2>
-          </div>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '16px' }}>
+          <h3 style={{ fontSize: '1.25rem', fontWeight: 800, margin: 0 }}>
+            {editingExpense ? 'تعديل المصروف' : 'إضافة مصروف اليوم'}
+          </h3>
           <button
             onClick={onClose}
-            className="btn btn-secondary btn-icon"
-            style={{ borderRadius: 'var(--radius-full)' }}
+            className="btn btn-secondary btn-icon btn-sm"
+            style={{ borderRadius: '50%' }}
           >
             <X size={18} />
           </button>
         </div>
 
         <form onSubmit={handleSubmit}>
-          {/* المبلغ والعملة في صف واحد */}
-          <div style={{ display: 'grid', gridTemplateColumns: '2fr 1.2fr', gap: '12px', marginBottom: '16px' }}>
-            <div>
-              <label className="form-label">المبلغ *</label>
-              <input
-                type="number"
-                step="any"
-                className="form-input"
-                value={amount}
-                onChange={(e) => setAmount(e.target.value)}
-                placeholder="0.00"
-                autoFocus
-                required
-                style={{ fontSize: '1.25rem', fontWeight: 700 }}
-              />
-            </div>
-            <div>
-              <label className="form-label">العملة</label>
-              <select
-                className="form-select"
-                value={currency}
-                onChange={(e) => setCurrency(e.target.value)}
-                style={{ fontSize: '0.92rem' }}
-              >
-                {settings?.currencies?.map((c) => (
-                  <option key={c.code} value={c.code}>
-                    {c.symbol} ({c.code})
-                  </option>
-                ))}
-              </select>
-            </div>
-          </div>
-
-          {/* معاينة التحويل إن كانت عملة مختلفة */}
-          {currency !== baseCurrency && Number(amount) > 0 && (
-            <div style={{
-              background: 'rgba(59, 130, 246, 0.08)',
-              border: '1px solid rgba(59, 130, 246, 0.25)',
-              padding: '8px 12px',
-              borderRadius: 'var(--radius-md)',
-              fontSize: '0.82rem',
-              color: 'var(--text-secondary)',
-              marginBottom: '16px',
-            }}>
-              يساوي تقريباً: <strong style={{ color: 'var(--color-info)' }}>{formatCurrency(convertedAmount, baseCurrencyObj?.symbol)}</strong> (سعر الصرف: 1 {currency} = {rate} {baseCurrency})
-            </div>
-          )}
-
-          {/* اختيار الفئة */}
-          <div className="form-group">
-            <label className="form-label">الفئة *</label>
+          {/* اختيار الفئة أولاً بنقرة واحدة */}
+          <div style={{ marginBottom: '18px' }}>
+            <label className="form-label" style={{ fontSize: '0.84rem', color: 'var(--text-muted)' }}>
+              اختر الفئة:
+            </label>
             <div style={{
               display: 'grid',
-              gridTemplateColumns: 'repeat(auto-fill, minmax(130px, 1fr))',
+              gridTemplateColumns: 'repeat(3, 1fr)',
               gap: '8px',
-              maxHeight: '160px',
-              overflowY: 'auto',
-              padding: '4px',
-              background: 'var(--bg-app)',
-              borderRadius: 'var(--radius-md)',
-              border: '1px solid var(--border-subtle)',
             }}>
               {categories.map((cat) => {
                 const isSelected = cat.id === categoryId;
@@ -194,189 +110,216 @@ export default function AddExpenseModal({
                   <button
                     key={cat.id}
                     type="button"
-                    onClick={() => setCategoryId(cat.id)}
+                    onClick={() => handleSelectCategory(cat)}
                     style={{
                       display: 'flex',
+                      flexDirection: 'column',
                       alignItems: 'center',
-                      gap: '8px',
-                      padding: '8px 10px',
+                      justifyContent: 'center',
+                      gap: '6px',
+                      padding: '12px 6px',
                       borderRadius: 'var(--radius-md)',
                       border: isSelected ? `2px solid ${cat.color}` : '1px solid var(--border-subtle)',
-                      background: isSelected ? 'var(--bg-surface)' : 'transparent',
-                      color: 'var(--text-primary)',
+                      background: isSelected ? `${cat.color}15` : 'var(--bg-app)',
+                      color: isSelected ? cat.color : 'var(--text-primary)',
                       cursor: 'pointer',
-                      textAlign: 'right',
-                      boxShadow: isSelected ? '0 2px 8px rgba(0,0,0,0.08)' : 'none',
                       transition: 'all 0.15s ease',
                     }}
                   >
                     <div style={{
-                      width: '28px',
-                      height: '28px',
-                      borderRadius: '8px',
+                      width: '36px',
+                      height: '36px',
+                      borderRadius: '10px',
                       background: `${cat.color}20`,
-                      color: cat.color,
                       display: 'flex',
                       alignItems: 'center',
                       justifyContent: 'center',
                     }}>
-                      <CategoryIcon name={cat.icon} size={16} color={cat.color} />
+                      <CategoryIcon name={cat.icon} size={20} color={cat.color} />
                     </div>
-                    <span style={{ fontSize: '0.82rem', fontWeight: isSelected ? 700 : 500, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                    <span style={{ fontSize: '0.84rem', fontWeight: isSelected ? 800 : 600 }}>
                       {cat.name}
                     </span>
+                    {cat.defaultAmount && (
+                      <span style={{ fontSize: '0.72rem', color: 'var(--text-muted)' }}>
+                        ({cat.defaultAmount} ₪)
+                      </span>
+                    )}
                   </button>
                 );
               })}
             </div>
           </div>
 
-          {/* مؤشر ميزانية الفئة الفوري والتنبيهات المباشرة */}
-          {category && plannedLimit > 0 && (
-            <div style={{
-              background: 'var(--bg-app)',
-              borderRadius: 'var(--radius-md)',
-              padding: '12px 14px',
-              border: '1px solid var(--border-subtle)',
-              marginBottom: '16px',
-            }}>
-              <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.82rem', marginBottom: '6px' }}>
-                <span style={{ color: 'var(--text-secondary)' }}>
-                  ميزانية <strong>{category.name}</strong>: {formatCurrency(plannedLimit, baseCurrencyObj?.symbol)}
-                </span>
-                <span style={{ fontWeight: 700, color: isOverLimit ? 'var(--color-danger)' : isNearLimit ? 'var(--color-warning)' : 'var(--color-success)' }}>
-                  {Math.round(projectedPercent)}%
-                </span>
-              </div>
-
-              <div className="progress-bar-container" style={{ height: '8px', marginBottom: '8px' }}>
-                <div
-                  className="progress-bar-fill"
-                  style={{
-                    width: `${Math.min(100, projectedPercent)}%`,
-                    background: isOverLimit ? 'var(--color-danger)' : isNearLimit ? 'var(--color-warning)' : category.color,
-                  }}
-                />
-              </div>
-
-              {/* تنبيه لطيف عند الوصول إلى 90% */}
-              {isNearLimit && (
-                <div style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '0.78rem', color: 'var(--color-warning)' }}>
-                  <AlertTriangle size={14} />
-                  <span>تنبيه لطيف: بهذا المصروف ستصل إلى 90% من سقف ميزانية هذه الفئة.</span>
-                </div>
-              )}
-
-              {/* تنبيه بارز عند تجاوز الفئة 100% */}
-              {isOverLimit && (
-                <div style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '0.78rem', color: 'var(--color-danger)' }}>
-                  <AlertCircle size={14} />
-                  <span>تحذير: ستتجاوز الميزانية المحددة لهذه الفئة بمقدار {formatCurrency(projectedSpent - plannedLimit, baseCurrencyObj?.symbol)}!</span>
-                </div>
-              )}
-            </div>
-          )}
-
-          {/* تنبيه بارز لعجز الميزانية الكلية إذا تجاوز إجمالي المصروف الراتب */}
-          {isBudgetDeficit && (
-            <div className="alert-banner danger" style={{ padding: '10px 14px', fontSize: '0.82rem', marginBottom: '16px' }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                <AlertCircle size={18} />
-                <strong>عجز في الميزانية!</strong>
-                <span>إجمالي المصاريف سيتجاوز الراتب الشهري بمقدار {formatCurrency(totalSpentAll - salary, baseCurrencyObj?.symbol)}.</span>
-              </div>
-            </div>
-          )}
-
-          {/* التاريخ والملاحظة */}
-          <div style={{ display: 'grid', gridTemplateColumns: '1.2fr 2fr', gap: '12px', marginBottom: '14px' }}>
-            <div>
-              <label className="form-label">التاريخ</label>
+          {/* خانة إدخال المبلغ بخط كبير واضح */}
+          <div style={{
+            background: 'var(--bg-app)',
+            padding: '16px',
+            borderRadius: 'var(--radius-lg)',
+            border: '2px solid var(--border-subtle)',
+            marginBottom: '16px',
+            textAlign: 'center',
+          }}>
+            <label style={{ fontSize: '0.82rem', color: 'var(--text-muted)', display: 'block', marginBottom: '6px' }}>
+              المبلغ لـ {currentCat?.name || 'المصروف'}
+            </label>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px' }}>
               <input
-                type="date"
+                type="number"
+                step="any"
                 className="form-input"
-                value={date}
-                onChange={(e) => setDate(e.target.value)}
+                value={amount}
+                onChange={(e) => setAmount(e.target.value)}
+                placeholder="0"
+                autoFocus
                 required
+                style={{
+                  textAlign: 'center',
+                  fontSize: '2rem',
+                  fontWeight: 900,
+                  height: '60px',
+                  maxWidth: '180px',
+                  background: 'var(--bg-surface)',
+                  border: '1px solid var(--border-focus)',
+                }}
               />
-            </div>
-            <div>
-              <label className="form-label">ملاحظة / المحل (اختياري)</label>
-              <input
-                type="text"
-                className="form-input"
-                value={note}
-                onChange={(e) => setNote(e.target.value)}
-                placeholder="مثال: كارفور، مطعم الرومانسية..."
-              />
-            </div>
-          </div>
-
-          {/* وسوم سريعة للملاحظات */}
-          {!editingExpense && (
-            <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap', marginBottom: '16px' }}>
-              {quickNotes.map((q) => (
+              {/* اختيار العملة: شيكل ₪ أو دولار $ */}
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
                 <button
-                  key={q}
                   type="button"
-                  onClick={() => setNote(q)}
+                  onClick={() => setCurrency('ILS')}
                   style={{
-                    background: 'var(--bg-app)',
-                    border: '1px solid var(--border-subtle)',
-                    borderRadius: 'var(--radius-full)',
-                    padding: '3px 10px',
-                    fontSize: '0.75rem',
-                    color: 'var(--text-secondary)',
+                    padding: '6px 12px',
+                    borderRadius: 'var(--radius-sm)',
+                    border: currency === 'ILS' ? '2px solid var(--brand-500)' : '1px solid var(--border-subtle)',
+                    background: currency === 'ILS' ? 'var(--brand-500)' : 'var(--bg-surface)',
+                    color: currency === 'ILS' ? '#fff' : 'var(--text-primary)',
+                    fontWeight: 800,
+                    fontSize: '0.9rem',
                     cursor: 'pointer',
                   }}
                 >
-                  {q}
+                  ₪
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setCurrency('USD')}
+                  style={{
+                    padding: '6px 12px',
+                    borderRadius: 'var(--radius-sm)',
+                    border: currency === 'USD' ? '2px solid var(--brand-500)' : '1px solid var(--border-subtle)',
+                    background: currency === 'USD' ? 'var(--brand-500)' : 'var(--bg-surface)',
+                    color: currency === 'USD' ? '#fff' : 'var(--text-primary)',
+                    fontWeight: 800,
+                    fontSize: '0.9rem',
+                    cursor: 'pointer',
+                  }}
+                >
+                  $
+                </button>
+              </div>
+            </div>
+
+            {/* أزرار مبالغ سريعة */}
+            <div style={{ display: 'flex', justifyContent: 'center', gap: '6px', marginTop: '12px' }}>
+              {[5, 10, 20, 50].map((val) => (
+                <button
+                  key={val}
+                  type="button"
+                  onClick={() => setAmount(String(val))}
+                  style={{
+                    padding: '4px 10px',
+                    borderRadius: 'var(--radius-full)',
+                    background: 'var(--bg-surface)',
+                    border: '1px solid var(--border-subtle)',
+                    color: 'var(--text-secondary)',
+                    fontSize: '0.8rem',
+                    fontWeight: 700,
+                    cursor: 'pointer',
+                  }}
+                >
+                  +{val} {currency === 'USD' ? '$' : '₪'}
                 </button>
               ))}
             </div>
-          )}
+          </div>
 
-          {/* خيار مصروف متكرر شهرياً */}
-          <div style={{
-            background: 'var(--bg-app)',
-            padding: '12px 14px',
-            borderRadius: 'var(--radius-md)',
-            border: '1px solid var(--border-subtle)',
-            marginBottom: '22px',
-          }}>
-            <label style={{ display: 'flex', alignItems: 'center', gap: '10px', cursor: 'pointer' }}>
-              <input
-                type="checkbox"
-                checked={isRecurring}
-                onChange={(e) => setIsRecurring(e.target.checked)}
-                style={{ width: '18px', height: '18px', accentColor: 'var(--brand-500)' }}
-              />
-              <div>
-                <div style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '0.88rem', fontWeight: 600 }}>
-                  <RefreshCw size={15} color="var(--brand-500)" />
-                  <span>مصروف متكرر شهرياً (إيجار، اشتراكات، أقساط)</span>
+          {/* خيارات إضافية (مخفية اختيارية خلف "المزيد") */}
+          <div style={{ marginBottom: '16px' }}>
+            <button
+              type="button"
+              onClick={() => setShowMore(!showMore)}
+              style={{
+                background: 'transparent',
+                border: 'none',
+                color: 'var(--text-muted)',
+                fontSize: '0.82rem',
+                cursor: 'pointer',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '4px',
+                margin: '0 auto',
+              }}
+            >
+              <span>{showMore ? 'إخفاء الخيارات الإضافية' : 'خيارات إضافية (تاريخ / ملاحظة)'}</span>
+              {showMore ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
+            </button>
+
+            {showMore && (
+              <div style={{
+                background: 'var(--bg-app)',
+                padding: '12px',
+                borderRadius: 'var(--radius-md)',
+                marginTop: '10px',
+                display: 'flex',
+                flexDirection: 'column',
+                gap: '10px',
+              }}>
+                <div>
+                  <label className="form-label" style={{ fontSize: '0.78rem' }}>التاريخ:</label>
+                  <input
+                    type="date"
+                    className="form-input"
+                    value={date}
+                    onChange={(e) => setDate(e.target.value)}
+                    style={{ fontSize: '0.85rem', padding: '8px 12px' }}
+                  />
                 </div>
-                <div style={{ fontSize: '0.76rem', color: 'var(--text-muted)' }}>
-                  سيتم تكراره وإضافته تلقائياً عند بداية كل شهر مالي جديد.
+                <div>
+                  <label className="form-label" style={{ fontSize: '0.78rem' }}>ملاحظة اختيارية:</label>
+                  <input
+                    type="text"
+                    className="form-input"
+                    value={note}
+                    onChange={(e) => setNote(e.target.value)}
+                    placeholder="مثال: بقالة أبو أحمد..."
+                    style={{ fontSize: '0.85rem', padding: '8px 12px' }}
+                  />
                 </div>
               </div>
-            </label>
+            )}
           </div>
 
-          {/* أزرار الحفظ والإلغاء */}
-          <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '10px' }}>
-            <button type="button" className="btn btn-secondary" onClick={onClose}>
-              إلغاء
-            </button>
-            <button
-              type="submit"
-              className="btn btn-primary"
-              disabled={!amount || Number(amount) <= 0}
-            >
-              <Check size={18} />
-              <span>{editingExpense ? 'حفظ التعديلات' : 'تسجيل المصروف'}</span>
-            </button>
-          </div>
+          {/* زر التأكيد الكبير */}
+          <button
+            type="submit"
+            className="btn btn-primary"
+            disabled={!amount || Number(amount) <= 0}
+            style={{
+              width: '100%',
+              padding: '14px',
+              fontSize: '1.1rem',
+              fontWeight: 800,
+              borderRadius: 'var(--radius-md)',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              gap: '8px',
+            }}
+          >
+            <Check size={20} />
+            <span>تأكيد المصروف ({amount ? `${amount} ${currency === 'USD' ? '$' : '₪'}` : 'أدخل المبلغ'})</span>
+          </button>
         </form>
       </div>
     </div>

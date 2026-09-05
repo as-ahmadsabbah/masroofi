@@ -2,17 +2,12 @@ import React, { useState, useRef } from 'react';
 import confetti from 'canvas-confetti';
 import {
   Settings,
-  Lock,
-  DollarSign,
-  Bell,
+  Shield,
   Download,
   Upload,
-  RefreshCw,
+  Sparkles,
   Trash2,
   CheckCircle2,
-  Calendar,
-  Sparkles,
-  Shield,
   FileSpreadsheet,
 } from 'lucide-react';
 import { storageService } from '../../services/storageService';
@@ -21,18 +16,17 @@ import { DEFAULT_CURRENCIES } from '../../constants/currencies';
 export default function SettingsView({
   settings,
   onUpdateSettings,
-  activeMonth,
   onDataReload,
 }) {
   const fileInputRef = useRef(null);
 
-  const [salary, setSalary] = useState(settings?.salary || 10000);
-  const [baseCurrency, setBaseCurrency] = useState(settings?.baseCurrency || 'SAR');
-  const [startDay, setStartDay] = useState(settings?.financialMonthStartDay || 25);
-  const [alertsEnabled, setAlertsEnabled] = useState(settings?.alertsEnabled !== false);
+  const [salary, setSalary] = useState(settings?.salary || 4000);
+  const [baseCurrency, setBaseCurrency] = useState(settings?.baseCurrency || 'ILS');
+  const [usdRate, setUsdRate] = useState(
+    settings?.currencies?.find(c => c.code === 'USD')?.rateToBase || 3.65
+  );
   const [pinLockEnabled, setPinLockEnabled] = useState(!!settings?.pinLockEnabled);
   const [pinCode, setPinCode] = useState(settings?.pinHash || '');
-  const [currencies, setCurrencies] = useState(settings?.currencies || DEFAULT_CURRENCIES);
 
   const handleSaveGeneral = (e) => {
     e.preventDefault();
@@ -41,15 +35,18 @@ export default function SettingsView({
       return;
     }
 
+    const updatedCurrencies = [
+      { code: 'ILS', symbol: '₪', name: 'شيكل', rateToBase: 1.0, isDefaultBase: baseCurrency === 'ILS' },
+      { code: 'USD', symbol: '$', name: 'دولار أمريكي', rateToBase: Number(usdRate) || 3.65, isDefaultBase: baseCurrency === 'USD' },
+    ];
+
     const updated = {
       ...settings,
       salary: Number(salary),
       baseCurrency,
-      financialMonthStartDay: Number(startDay),
-      alertsEnabled,
+      currencies: updatedCurrencies,
       pinLockEnabled,
       pinHash: pinLockEnabled ? pinCode : '',
-      currencies,
     };
 
     onUpdateSettings(updated);
@@ -57,14 +54,7 @@ export default function SettingsView({
     alert('تم حفظ الإعدادات بنجاح!');
   };
 
-  const handleCurrencyRateChange = (code, newRate) => {
-    const updatedCurrencies = currencies.map((c) =>
-      c.code === code ? { ...c, rateToBase: Number(newRate) || 1 } : c
-    );
-    setCurrencies(updatedCurrencies);
-  };
-
-  // تصدير النسخ الاحتياطي الشامل كـ JSON
+  // تصدير نسخة احتياطية JSON
   const handleExportJson = () => {
     const jsonStr = storageService.exportAllDataAsJson();
     const blob = new Blob([jsonStr], { type: 'application/json;charset=utf-8;' });
@@ -77,7 +67,7 @@ export default function SettingsView({
     document.body.removeChild(a);
   };
 
-  // استيراد النسخ الاحتياطي من JSON
+  // استيراد JSON
   const handleImportJson = (e) => {
     const file = e.target.files?.[0];
     if (!file) return;
@@ -97,15 +87,14 @@ export default function SettingsView({
     reader.readAsText(file);
   };
 
-  // تصدير المصاريف الحالية كـ CSV
+  // تصدير CSV
   const handleExportCsv = () => {
-    const currencyObj = settings?.currencies?.find((c) => c.code === settings?.baseCurrency);
-    const csvContent = storageService.exportExpensesAsCsv(activeMonth, currencyObj?.symbol || 'ر.س');
+    const csvContent = storageService.exportExpensesAsCsv();
     const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
     const url = URL.createObjectURL(blob);
     const link = document.createElement('a');
     link.href = url;
-    link.setAttribute('download', `masroofi_expenses_${activeMonth}.csv`);
+    link.setAttribute('download', `masroofi_expenses.csv`);
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
@@ -113,34 +102,34 @@ export default function SettingsView({
 
   // توليد بيانات تجريبية
   const handleGenerateDemo = () => {
-    if (window.confirm('هل تريد ملء التطبيق ببيانات واقعية لتجربة كافة الرسوم البيانية والشاشات فوراً؟ (ستستبدل البيانات الحالية)')) {
+    if (window.confirm('هل تريد ملء التطبيق ببيانات تجريبية بالشيكل (دخان، قهوة، أكل، مواصلات، اشتراك) لتجربة الشاشة الرئيسية والتوقع والرسم البياني؟')) {
       storageService.generateDemoData();
-      confetti({ particleCount: 100, spread: 80 });
+      confetti({ particleCount: 90, spread: 70 });
       alert('تم تحميل البيانات التجريبية بنجاح!');
       onDataReload();
     }
   };
 
-  // مسح كافة البيانات
+  // مسح جميع البيانات
   const handleClearAll = () => {
-    if (window.confirm('تحذير نهائي: هل أنت متأكد من مسح جميع البيانات نهائياً؟ لا يمكن التراجع عن هذا الإجراء.')) {
+    if (window.confirm('تحذير: هل أنت متأكد من مسح جميع البيانات والبدء من الصفر؟')) {
       storageService.clearAllData();
-      alert('تم مسح جميع البيانات وإعادة ضبط المصنع.');
+      alert('تم مسح جميع البيانات.');
       window.location.reload();
     }
   };
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
-      {/* 1. الإعدادات العامة والمالية */}
+    <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+      {/* 1. الإعدادات المالية والراتب والعملة */}
       <div className="glass-card">
-        <h2 style={{ fontSize: '1.25rem', fontWeight: 800, marginBottom: '18px', display: 'flex', alignItems: 'center', gap: '8px' }}>
-          <Settings size={22} color="var(--brand-500)" />
-          <span>الإعدادات المالية العامة</span>
+        <h2 style={{ fontSize: '1.25rem', fontWeight: 800, marginBottom: '16px', display: 'flex', alignItems: 'center', gap: '8px' }}>
+          <Settings size={20} color="var(--brand-500)" />
+          <span>الراتب والعملة</span>
         </h2>
 
         <form onSubmit={handleSaveGeneral}>
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))', gap: '16px', marginBottom: '18px' }}>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '14px', marginBottom: '16px' }}>
             <div>
               <label className="form-label">الراتب الشهري الصافي</label>
               <input
@@ -150,7 +139,7 @@ export default function SettingsView({
                 value={salary}
                 onChange={(e) => setSalary(e.target.value)}
                 required
-                style={{ fontSize: '1.1rem', fontWeight: 700 }}
+                style={{ fontSize: '1.2rem', fontWeight: 800 }}
               />
             </div>
 
@@ -160,39 +149,27 @@ export default function SettingsView({
                 className="form-select"
                 value={baseCurrency}
                 onChange={(e) => setBaseCurrency(e.target.value)}
+                style={{ fontSize: '1rem', fontWeight: 700 }}
               >
-                {currencies.map((c) => (
-                  <option key={c.code} value={c.code}>
-                    {c.name} ({c.symbol} - {c.code})
-                  </option>
-                ))}
+                <option value="ILS">شيكل (₪ - ILS)</option>
+                <option value="USD">دولار أمريكي ($ - USD)</option>
               </select>
             </div>
 
             <div>
-              <label className="form-label">يوم بداية الدورة المالية (نزول الراتب)</label>
-              <select
-                className="form-select"
-                value={startDay}
-                onChange={(e) => setStartDay(Number(e.target.value))}
-              >
-                <option value={1}>1 من كل شهر ميلادي</option>
-                <option value={25}>25 من كل شهر ميلادي (القطاع الحكومي الخليجي)</option>
-                <option value={27}>27 من كل شهر ميلادي</option>
-                <option value={28}>28 من كل شهر ميلادي</option>
-                <option value={30}>30 من كل شهر ميلادي</option>
-                {[...Array(28)].map((_, i) => (
-                  i + 1 !== 1 && i + 1 !== 25 && i + 1 !== 27 && i + 1 !== 28 ? (
-                    <option key={i + 1} value={i + 1}>
-                      يوم {i + 1} من الشهر
-                    </option>
-                  ) : null
-                ))}
-              </select>
+              <label className="form-label">سعر صرف الدولار مقابل الشيكل (1$ = كم ₪)</label>
+              <input
+                type="number"
+                step="0.01"
+                className="form-input"
+                value={usdRate}
+                onChange={(e) => setUsdRate(e.target.value)}
+                style={{ fontSize: '1rem' }}
+              />
             </div>
           </div>
 
-          {/* تفعيل التنبيهات الذكية */}
+          {/* قفل التطبيق بالرقم السري */}
           <div style={{
             background: 'var(--bg-app)',
             padding: '14px',
@@ -200,34 +177,7 @@ export default function SettingsView({
             border: '1px solid var(--border-subtle)',
             marginBottom: '18px',
           }}>
-            <label style={{ display: 'flex', alignItems: 'center', gap: '10px', cursor: 'pointer' }}>
-              <input
-                type="checkbox"
-                checked={alertsEnabled}
-                onChange={(e) => setAlertsEnabled(e.target.checked)}
-                style={{ width: '18px', height: '18px', accentColor: 'var(--brand-500)' }}
-              />
-              <div>
-                <div style={{ display: 'flex', alignItems: 'center', gap: '6px', fontWeight: 700, fontSize: '0.92rem' }}>
-                  <Bell size={16} color="var(--brand-500)" />
-                  <span>تفعيل التنبيهات الذكية (تجاوز الفئات وعجز الميزانية)</span>
-                </div>
-                <div style={{ fontSize: '0.78rem', color: 'var(--text-muted)' }}>
-                  إظهار تنبيه لطيف عند وصول الفئة إلى 90% من حدها وتنبيه أحمر بارز عند التجاوز.
-                </div>
-              </div>
-            </label>
-          </div>
-
-          {/* قفل التطبيق برمز PIN */}
-          <div style={{
-            background: 'var(--bg-app)',
-            padding: '16px',
-            borderRadius: 'var(--radius-md)',
-            border: '1px solid var(--border-subtle)',
-            marginBottom: '20px',
-          }}>
-            <label style={{ display: 'flex', alignItems: 'center', gap: '10px', cursor: 'pointer', marginBottom: pinLockEnabled ? '14px' : '0' }}>
+            <label style={{ display: 'flex', alignItems: 'center', gap: '10px', cursor: 'pointer', marginBottom: pinLockEnabled ? '10px' : '0' }}>
               <input
                 type="checkbox"
                 checked={pinLockEnabled}
@@ -235,19 +185,18 @@ export default function SettingsView({
                 style={{ width: '18px', height: '18px', accentColor: 'var(--brand-500)' }}
               />
               <div>
-                <div style={{ display: 'flex', alignItems: 'center', gap: '6px', fontWeight: 700, fontSize: '0.92rem' }}>
+                <strong style={{ fontSize: '0.92rem', display: 'flex', alignItems: 'center', gap: '6px' }}>
                   <Shield size={16} color="var(--brand-500)" />
-                  <span>تفعيل قفل الخصوصية برقم سري (PIN Lock)</span>
-                </div>
-                <div style={{ fontSize: '0.78rem', color: 'var(--text-muted)' }}>
-                  يطلب رمز أمان مكوّن من 4 أرقام في كل مرة يُفتح فيها التطبيق لحماية خصوصية أموالك.
-                </div>
+                  <span>تفعيل قفل الأمان برقم سري (PIN Lock)</span>
+                </strong>
+                <span style={{ fontSize: '0.76rem', color: 'var(--text-muted)' }}>
+                  طلب رمز مكوّن من 4 أرقام عند فتح التطبيق لحماية خصوصية مصاريفك
+                </span>
               </div>
             </label>
 
             {pinLockEnabled && (
-              <div style={{ maxWidth: '280px', marginTop: '10px' }}>
-                <label className="form-label">أدخل رمز PIN المكوّن من 4 أرقام:</label>
+              <div style={{ maxWidth: '240px', marginTop: '8px' }}>
                 <input
                   type="password"
                   maxLength={4}
@@ -255,7 +204,7 @@ export default function SettingsView({
                   value={pinCode}
                   onChange={(e) => setPinCode(e.target.value.replace(/\D/g, ''))}
                   placeholder="••••"
-                  style={{ textAlign: 'center', fontSize: '1.4rem', letterSpacing: '8px', fontWeight: 800 }}
+                  style={{ textAlign: 'center', fontSize: '1.4rem', letterSpacing: '6px', fontWeight: 900 }}
                   required={pinLockEnabled}
                 />
               </div>
@@ -264,88 +213,29 @@ export default function SettingsView({
 
           <button type="submit" className="btn btn-primary">
             <CheckCircle2 size={16} />
-            <span>حفظ التعديلات العامة</span>
+            <span>حفظ الإعدادات</span>
           </button>
         </form>
       </div>
 
-      {/* 2. إدارة العملات وأسعار الصرف */}
+      {/* 2. النسخ الاحتياطي وتصدير البيانات */}
       <div className="glass-card">
-        <h2 style={{ fontSize: '1.25rem', fontWeight: 800, marginBottom: '8px', display: 'flex', alignItems: 'center', gap: '8px' }}>
-          <DollarSign size={22} color="var(--brand-500)" />
-          <span>العملات الإضافية وأسعار الصرف</span>
-        </h2>
-        <p style={{ fontSize: '0.82rem', color: 'var(--text-muted)', marginBottom: '16px' }}>
-          حدد كم تساوي كل عملة بالنسبة لعملتك الأساسية ({baseCurrency}) لتحويل دخل الفريلانس والمصاريف الدولية تلقائياً.
-        </p>
-
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: '12px' }}>
-          {currencies.map((c) => {
-            const isBase = c.code === baseCurrency;
-            return (
-              <div
-                key={c.code}
-                style={{
-                  background: 'var(--bg-app)',
-                  padding: '12px',
-                  borderRadius: 'var(--radius-md)',
-                  border: isBase ? '2px solid var(--brand-500)' : '1px solid var(--border-subtle)',
-                }}
-              >
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
-                  <strong style={{ fontSize: '0.9rem' }}>{c.name} ({c.symbol})</strong>
-                  {isBase ? (
-                    <span className="badge badge-success" style={{ fontSize: '0.68rem' }}>الأساسية</span>
-                  ) : (
-                    <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>{c.code}</span>
-                  )}
-                </div>
-
-                {!isBase ? (
-                  <div>
-                    <label style={{ fontSize: '0.74rem', color: 'var(--text-muted)', display: 'block', marginBottom: '4px' }}>
-                      1 {c.code} = كم {baseCurrency}؟
-                    </label>
-                    <input
-                      type="number"
-                      step="0.001"
-                      className="form-input"
-                      value={c.rateToBase}
-                      onChange={(e) => handleCurrencyRateChange(c.code, e.target.value)}
-                      style={{ padding: '6px 10px', fontSize: '0.85rem' }}
-                    />
-                  </div>
-                ) : (
-                  <div style={{ fontSize: '0.8rem', color: 'var(--brand-500)', fontWeight: 600, padding: '6px 0' }}>
-                    1 {baseCurrency} = 1.00 (المرجع الأساسي)
-                  </div>
-                )}
-              </div>
-            );
-          })}
-        </div>
-      </div>
-
-      {/* 3. تصدير واستيراد البيانات والنسخ الاحتياطي (Backup & Restore) */}
-      <div className="glass-card">
-        <h2 style={{ fontSize: '1.25rem', fontWeight: 800, marginBottom: '8px', display: 'flex', alignItems: 'center', gap: '8px' }}>
-          <Download size={22} color="var(--brand-500)" />
+        <h2 style={{ fontSize: '1.2rem', fontWeight: 800, marginBottom: '8px', display: 'flex', alignItems: 'center', gap: '8px' }}>
+          <Download size={18} color="var(--brand-500)" />
           <span>النسخ الاحتياطي وتصدير البيانات</span>
         </h2>
-        <p style={{ fontSize: '0.82rem', color: 'var(--text-muted)', marginBottom: '16px' }}>
-          بياناتك محفوظة محلياً في متصفحك. يمكنك تنزيل نسخة احتياطية واستعادتها في أي وقت أو تصديرها لملف Excel.
+        <p style={{ fontSize: '0.8rem', color: 'var(--text-muted)', marginBottom: '14px' }}>
+          بياناتك مخزنة محلياً في متصفحك. يمكنك تنزيل نسخة احتياطية أو تصدير المصاريف لـ Excel.
         </p>
 
-        <div style={{ display: 'flex', flexWrap: 'wrap', gap: '12px' }}>
-          {/* تصدير JSON كامل */}
+        <div style={{ display: 'flex', flexWrap: 'wrap', gap: '10px' }}>
           <button className="btn btn-primary btn-sm" onClick={handleExportJson}>
-            <Download size={16} />
-            <span>تصدير نسخة احتياطية كاملة (JSON)</span>
+            <Download size={15} />
+            <span>تصدير نسخة احتياطية (JSON)</span>
           </button>
 
-          {/* استيراد JSON كامل */}
           <button className="btn btn-secondary btn-sm" onClick={() => fileInputRef.current?.click()}>
-            <Upload size={16} />
+            <Upload size={15} />
             <span>استعادة نسخة احتياطية (استيراد JSON)</span>
           </button>
           <input
@@ -356,34 +246,31 @@ export default function SettingsView({
             style={{ display: 'none' }}
           />
 
-          {/* تصدير CSV للشهر الحالي */}
           <button className="btn btn-secondary btn-sm" onClick={handleExportCsv}>
-            <FileSpreadsheet size={16} color="#10b981" />
-            <span>تصدير مصاريف هذا الشهر (CSV / Excel)</span>
+            <FileSpreadsheet size={15} color="#10b981" />
+            <span>تصدير ملف Excel / CSV</span>
           </button>
         </div>
       </div>
 
-      {/* 4. أدوات المطور والتجربة ومسح البيانات */}
-      <div className="glass-card" style={{ borderColor: 'rgba(239, 68, 68, 0.2)' }}>
-        <h2 style={{ fontSize: '1.2rem', fontWeight: 800, marginBottom: '8px', color: 'var(--text-primary)' }}>
-          إدارة النظام والبيانات التجريبية
+      {/* 3. أدوات التجربة ومسح البيانات */}
+      <div className="glass-card">
+        <h2 style={{ fontSize: '1.15rem', fontWeight: 800, marginBottom: '8px' }}>
+          بيانات تجريبية وإعادة ضبط
         </h2>
-        <p style={{ fontSize: '0.82rem', color: 'var(--text-muted)', marginBottom: '16px' }}>
-          أدوات للمساعدة في اختبار كافة وظائف التطبيق أو تصفير البيانات للبدء من الصفر.
+        <p style={{ fontSize: '0.8rem', color: 'var(--text-muted)', marginBottom: '14px' }}>
+          جرب التطبيق ببيانات واقعية فوراً (شيكل، دخان، قهوة، أكل، مواصلات).
         </p>
 
-        <div style={{ display: 'flex', flexWrap: 'wrap', gap: '12px' }}>
-          {/* زر توليد بيانات تجريبية */}
+        <div style={{ display: 'flex', flexWrap: 'wrap', gap: '10px' }}>
           <button className="btn btn-secondary btn-sm" onClick={handleGenerateDemo} style={{ borderColor: '#f59e0b', color: '#f59e0b' }}>
-            <Sparkles size={16} color="#f59e0b" />
-            <span>توليد بيانات تجريبية واقعية لأشهر سابقة</span>
+            <Sparkles size={15} color="#f59e0b" />
+            <span>توليد بيانات تجريبية بالشيكل (دخان، قهوة، أكل)</span>
           </button>
 
-          {/* زر مسح البيانات بالكامل */}
           <button className="btn btn-danger btn-sm" onClick={handleClearAll}>
-            <Trash2 size={16} />
-            <span>مسح جميع البيانات والبدء من الصفر</span>
+            <Trash2 size={15} />
+            <span>تصفير جميع البيانات والبدء من الصفر</span>
           </button>
         </div>
       </div>
